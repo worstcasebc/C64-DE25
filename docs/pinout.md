@@ -51,11 +51,36 @@ Low-aktiv (Pin = 0 → LED leuchtet).
 | LEDR[6] | PIN_DJ27 | 1.1 V        |
 | LEDR[7] | PIN_DP30 | 1.1 V        |
 
+## FPGA-UART über den Onboard-FTDI
+
+Quelle: `golden_top.qsf` und das Demo `Demonstration/FPGA/UART` aus Terasics
+Ressourcen-Paket (das User Manual listet nur die HPS-UART-Pins). Der UART
+läuft über den FTDI-Chip am selben Type-C-Kabel wie der USB-Blaster und
+erscheint am PC als „USB Serial Port (COMx)“; das Board meldet zwei solche
+Ports. Am Entwicklungsrechner ist der FPGA-UART COM12 (per Empfangstest
+bestätigt), COM11 demnach der HPS-UART. 115200 Baud, 8N1.
+
+Für JTAG-Programmierung muss SW5 im JTAG-Modus stehen (SW5.1–5.3 OFF, nur
+stromlos umstellen). In der Werksstellung „AS Fast“ scheiterte das Laden
+wiederholt mit „Synchronization failed“.
+
+| Signal       | Pin      | Richtung (FPGA) | I/O-Standard |
+|--------------|----------|-----------------|--------------|
+| FPGA_UART_TX | PIN_CJ1  | Ausgang         | 3.3-V LVCMOS |
+| FPGA_UART_RX | PIN_BR19 | Eingang (noch unbenutzt) | 3.3-V LVCMOS |
+
 ## Hinweis zum I/O-Standard
 
-Das Handbuch nennt nur „1.1V“. In der .qsf heißt der Standard `"1.1 V"`
-(mit Leerzeichen) — `"1.1-V LVCMOS"` lehnt der Fitter von Quartus Pro 26.1 ab
-(Error 11989). Der Name ist per Komplettlauf geprüft, stammt aber nicht
-wörtlich aus dem Handbuch. Maßgeblich bleibt das `golden_top`-Projekt der
-Terasic-System-CD (`Demonstration/FPGA/golden_top`) — bei Gelegenheit damit
-abgleichen, auch wegen Treiberstärke/Slew-Rate (Quartus-Warnung 25315).
+Das Handbuch nennt nur „1.1V“. Terasics `golden_top.qsf` schreibt `"1.1-V"`;
+unsere .qsf nutzt die gleichwertige Schreibweise `"1.1 V"` (Quartus meldet
+sie im Report als „1.1-V“). `"1.1-V LVCMOS"` lehnt der Fitter ab (Error 11989).
+
+Abgleich mit `golden_top.qsf` (liegt lokal unter
+`..\Material\ResPack\Demonstration\FPGA\Golden_top`): Pins und I/O-Standards
+für Takt, Taster, Schalter und LEDs stimmen überein. Terasic setzt dort
+ebenfalls keine Treiberstärke/Slew-Rate/Terminierung — die Quartus-Warnung
+25315 ist also auch im Referenzprojekt vorhanden. Die LEDs heißen dort `LED`
+statt `LEDR` (Handbuch).
+
+**Offen — Device-Bezeichnung:** Handbuch (auch revB) und unser Projekt nennen
+`A5EB013BB23BE4SR1`, 12 von 13 Terasic-Demos dagegen `A5EB013BB23BE4SCS`.

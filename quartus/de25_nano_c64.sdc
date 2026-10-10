@@ -16,3 +16,16 @@ set_false_path -to   [get_ports {LEDR[*]}]
 # Angabe, relativ zu welchem Takt er betrachtet wird — auch wenn der Pfad
 # oben vom Timing ausgenommen ist. 0 ns = "keine externe Anforderung".
 set_output_delay -clock clk_50 0 [get_ports {LEDR[*]}]
+
+# UART ist asynchron zum Empfänger (der tastet selbst in der Bitmitte ab);
+# ein Bit dauert 434 Takte, Nanosekunden am Pin spielen keine Rolle.
+set_false_path   -to [get_ports FPGA_UART_TX]
+set_output_delay -clock clk_50 0 [get_ports FPGA_UART_TX]
+
+# JTAG-Takt: existiert nur, wenn Signal Tap (oder anderes JTAG-Debug) im
+# Design steckt. Er kommt vom USB-Blaster und hat keinen Bezug zu clk_50,
+# deshalb als eigene, asynchrone Taktgruppe.
+if {[get_collection_size [get_ports -nowarn altera_reserved_tck]] > 0} {
+    create_clock -name altera_reserved_tck -period 100.000 [get_ports altera_reserved_tck]
+    set_clock_groups -asynchronous -group {altera_reserved_tck}
+}

@@ -1,13 +1,19 @@
-<session jtag_chain="DE25-Nano [USB-1]" jtag_device="@1: A5E(A013BB23B|B013BB23BCS)/.. (0x4362C0DD)" sof_file="">
-  <display_tree gui_logging_enabled="0">
-    <display_branch instance="auto_signaltap_0" signal_set="USE_GLOBAL_TEMP" trigger="USE_GLOBAL_TEMP"/>
+<session jtag_chain="DE25-Nano [USB-1]" jtag_device="@1: A5E(A013BB23B|B013BB23BCS)/.. (0x4362C0DD)" sof_file="output_files/de25_nano_c64.sof">
+  <display_tree gui_logging_enabled="1">
+    <display_branch instance="auto_signaltap_0" signal_set="signal_set: 2026-10-10 20:50:42  #0" trigger="trigger: 2026-10-10 20:50:42  #1"/>
   </display_tree>
   <instance enabled="true" entity_name="sld_signaltap" is_auto_node="yes" is_expanded="true" name="auto_signaltap_0" source_file="sld_signaltap.vhd">
     <node_ip_info instance_id="0" mfg_id="110" node_id="0" version="6"/>
     <position_info>
-      <single attribute="active tab" value="1"/>
+      <single attribute="active tab" value="0"/>
       <single attribute="setup vertical scroll position" value="0"/>
       <single attribute="setup horizontal scroll position" value="0"/>
+      <single attribute="data vertical scroll position" value="0"/>
+      <single attribute="data horizontal scroll position" value="0"/>
+      <single attribute="zoom level numerator" value="1"/>
+      <single attribute="zoom level denominator" value="1"/>
+      <single attribute="zoom offset numerator" value="130048"/>
+      <single attribute="zoom offset denominator" value="1"/>
     </position_info>
     <signal_set global_temp="1" name="signal_set: 2026-10-10 20:44:49  #0">
       <clock name="CLOCK0_50" polarity="posedge" tap_mode="classic"/>
@@ -108,35 +114,35 @@
       <presentation>
         <unified_setup_data_view>
           <node async_clock_name="clk_50" is_async="false" is_selected="false" level-0="alt_or" name="u_blink_50|cnt_q[24..0]" order="msb_to_lsb" state="collapse" type="unknown">
-            <node async_clock_name="CLOCK0_50" data_index="18" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[24]" storage_index="18" tap_mode="classic" trigger_index="18" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="17" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[23]" storage_index="17" tap_mode="classic" trigger_index="17" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="16" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[22]" storage_index="16" tap_mode="classic" trigger_index="16" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="15" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[21]" storage_index="15" tap_mode="classic" trigger_index="15" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="14" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[20]" storage_index="14" tap_mode="classic" trigger_index="14" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="12" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[19]" storage_index="12" tap_mode="classic" trigger_index="12" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="11" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[18]" storage_index="11" tap_mode="classic" trigger_index="11" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="10" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[17]" storage_index="10" tap_mode="classic" trigger_index="10" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="9" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[16]" storage_index="9" tap_mode="classic" trigger_index="9" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="8" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[15]" storage_index="8" tap_mode="classic" trigger_index="8" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="7" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[14]" storage_index="7" tap_mode="classic" trigger_index="7" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="6" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[13]" storage_index="6" tap_mode="classic" trigger_index="6" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="5" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[12]" storage_index="5" tap_mode="classic" trigger_index="5" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="4" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[11]" storage_index="4" tap_mode="classic" trigger_index="4" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="3" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[10]" storage_index="3" tap_mode="classic" trigger_index="3" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="26" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[9]" storage_index="26" tap_mode="classic" trigger_index="26" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="25" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[8]" storage_index="25" tap_mode="classic" trigger_index="25" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="24" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[7]" storage_index="24" tap_mode="classic" trigger_index="24" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="23" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[6]" storage_index="23" tap_mode="classic" trigger_index="23" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="22" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[5]" storage_index="22" tap_mode="classic" trigger_index="22" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="21" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[4]" storage_index="21" tap_mode="classic" trigger_index="21" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="20" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[3]" storage_index="20" tap_mode="classic" trigger_index="20" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="19" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[2]" storage_index="19" tap_mode="classic" trigger_index="19" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="13" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[1]" storage_index="13" tap_mode="classic" trigger_index="13" type="unknown"/>
-            <node async_clock_name="CLOCK0_50" data_index="2" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[0]" storage_index="2" tap_mode="classic" trigger_index="2" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="17" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[24]" storage_index="17" tap_mode="classic" trigger_index="17" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="16" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[23]" storage_index="16" tap_mode="classic" trigger_index="16" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="15" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[22]" storage_index="15" tap_mode="classic" trigger_index="15" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="14" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[21]" storage_index="14" tap_mode="classic" trigger_index="14" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="13" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[20]" storage_index="13" tap_mode="classic" trigger_index="13" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="11" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[19]" storage_index="11" tap_mode="classic" trigger_index="11" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="10" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[18]" storage_index="10" tap_mode="classic" trigger_index="10" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="9" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[17]" storage_index="9" tap_mode="classic" trigger_index="9" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="8" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[16]" storage_index="8" tap_mode="classic" trigger_index="8" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="7" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[15]" storage_index="7" tap_mode="classic" trigger_index="7" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="6" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[14]" storage_index="6" tap_mode="classic" trigger_index="6" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="5" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[13]" storage_index="5" tap_mode="classic" trigger_index="5" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="4" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[12]" storage_index="4" tap_mode="classic" trigger_index="4" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="3" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[11]" storage_index="3" tap_mode="classic" trigger_index="3" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="2" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[10]" storage_index="2" tap_mode="classic" trigger_index="2" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="25" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[9]" storage_index="25" tap_mode="classic" trigger_index="25" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="24" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[8]" storage_index="24" tap_mode="classic" trigger_index="24" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="23" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[7]" storage_index="23" tap_mode="classic" trigger_index="23" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="22" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[6]" storage_index="22" tap_mode="classic" trigger_index="22" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="21" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[5]" storage_index="21" tap_mode="classic" trigger_index="21" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="20" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[4]" storage_index="20" tap_mode="classic" trigger_index="20" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="19" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[3]" storage_index="19" tap_mode="classic" trigger_index="19" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="18" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[2]" storage_index="18" tap_mode="classic" trigger_index="18" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="12" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[1]" storage_index="12" tap_mode="classic" trigger_index="12" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="1" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[0]" storage_index="1" tap_mode="classic" trigger_index="1" type="unknown"/>
           </node>
-          <node async_clock_name="CLOCK0_50" data_index="27" dni_checkpoint="elaborated" dni_object_type="port" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|led_q" storage_index="27" tap_mode="classic" trigger_index="27" type="unknown"/>
-          <node async_clock_name="" data_index="1" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_async="true" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="rst" storage_index="1" tap_mode="classic" trigger_index="1" type="unknown"/>
-          <node async_clock_name="CLOCK0_50" dni_checkpoint="elaborated" dni_object_type="instance" duplicate_name_allowed="false" is_data_input="true" is_node_valid="false" is_selected="true" is_storage_input="true" is_trigger_input="true" name="u_sync_key|d_sync_q[1]" tap_mode="classic" type="unknown"/>
+          <node async_clock_name="CLOCK0_50" data_index="26" dni_checkpoint="elaborated" dni_object_type="port" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|led_q" storage_index="26" tap_mode="classic" trigger_index="26" type="unknown"/>
+          <node async_clock_name="" data_index="0" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_async="true" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="rst" storage_index="0" tap_mode="classic" trigger_index="0" type="unknown"/>
+          <node async_clock_name="CLOCK0_50" data_index="27" dni_checkpoint="elaborated" dni_object_type="instance" duplicate_name_allowed="false" is_data_input="true" is_node_valid="false" is_selected="true" is_storage_input="true" is_trigger_input="true" name="u_sync_key|d_sync_q[1]" storage_index="27" tap_mode="classic" trigger_index="27" type="unknown"/>
         </unified_setup_data_view>
         <data_view>
           <bus async_clock_name="clk_50" is_async="false" is_selected="false" level-0="alt_or" name="u_blink_50|cnt_q[24..0]" order="msb_to_lsb" state="collapse" type="unknown">
@@ -205,7 +211,238 @@
         <trigger_in_editor/>
         <trigger_out_editor/>
       </presentation>
-      <trigger attribute_mem_mode="false" gap_record="true" global_temp="1" name="trigger: 2026-10-10 20:44:49  #1" position="pre" power_up_trigger_mode="false" record_data_gap="true" segment_size="256" storage_mode="off" storage_qualifier_disabled="no" storage_qualifier_port_is_pin="true" storage_qualifier_port_name="auto_stp_external_storage_qualifier" storage_qualifier_port_tap_mode="classic" trigger_type="circular">
+      <trigger CRC="66AD77C4" attribute_mem_mode="false" gap_record="true" global_temp="1" name="trigger: 2026-10-10 20:44:49  #1" position="pre" power_up_trigger_mode="false" record_data_gap="true" segment_size="256" storage_mode="off" storage_qualifier_disabled="no" storage_qualifier_port_is_pin="true" storage_qualifier_port_name="auto_stp_external_storage_qualifier" storage_qualifier_port_tap_mode="classic" trigger_type="circular">
+        <power_up_trigger position="pre" storage_qualifier_disabled="no"/>
+        <events use_custom_flow_control="no">
+          <level enabled="yes" name="condition1" type="basic">
+            <power_up enabled="yes">
+            </power_up>
+            <op_node/>
+          </level>
+        </events>
+        <storage_qualifier_events>
+          <transitional>1111111111111111111111111111
+            <pwr_up_transitional>1111111111111111111111111111</pwr_up_transitional>
+          </transitional>
+          <storage_qualifier_level type="basic">
+            <power_up>
+            </power_up>
+            <op_node/>
+          </storage_qualifier_level>
+          <storage_qualifier_level type="basic">
+            <power_up>
+            </power_up>
+            <op_node/>
+          </storage_qualifier_level>
+          <storage_qualifier_level type="basic">
+            <power_up>
+            </power_up>
+            <op_node/>
+          </storage_qualifier_level>
+        </storage_qualifier_events>
+        <log>
+          <data global_temp="1" name="log: 2026-10-10 20:48:46  #0"/>
+          <extradata/>
+        </log>
+      </trigger>
+    </signal_set>
+    <signal_set name="signal_set: 2026-10-10 20:50:42  #0">
+      <clock name="CLOCK0_50" polarity="posedge" tap_mode="classic"/>
+      <config pipeline_level="0" ram_type="AUTO" reserved_data_nodes="0" reserved_storage_qualifier_nodes="0" reserved_trigger_nodes="0" sample_depth="1024" trigger_in_enable="no" trigger_out_enable="no"/>
+      <top_entity/>
+      <signal_vec>
+        <trigger_input_vec>
+          <wire name="rst" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[0]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[10]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[11]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[12]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[13]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[14]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[15]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[16]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[17]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[18]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[19]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[1]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[20]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[21]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[22]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[23]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[24]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[2]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[3]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[4]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[5]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[6]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[7]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[8]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[9]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|led_q" tap_mode="classic" type="unknown"/>
+          <wire name="u_sync_key|d_sync_q[1]" tap_mode="classic" type="unknown"/>
+        </trigger_input_vec>
+        <data_input_vec>
+          <wire name="rst" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[0]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[10]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[11]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[12]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[13]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[14]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[15]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[16]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[17]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[18]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[19]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[1]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[20]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[21]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[22]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[23]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[24]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[2]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[3]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[4]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[5]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[6]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[7]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[8]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[9]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|led_q" tap_mode="classic" type="unknown"/>
+          <wire name="u_sync_key|d_sync_q[1]" tap_mode="classic" type="unknown"/>
+        </data_input_vec>
+        <storage_qualifier_input_vec>
+          <wire name="rst" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[0]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[10]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[11]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[12]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[13]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[14]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[15]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[16]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[17]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[18]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[19]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[1]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[20]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[21]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[22]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[23]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[24]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[2]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[3]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[4]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[5]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[6]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[7]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[8]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|cnt_q[9]" tap_mode="classic" type="unknown"/>
+          <wire name="u_blink_50|led_q" tap_mode="classic" type="unknown"/>
+          <wire name="u_sync_key|d_sync_q[1]" tap_mode="classic" type="unknown"/>
+        </storage_qualifier_input_vec>
+      </signal_vec>
+      <presentation>
+        <unified_setup_data_view>
+          <node async_clock_name="clk_50" is_async="false" is_selected="false" level-0="alt_or" name="u_blink_50|cnt_q[24..0]" order="msb_to_lsb" state="collapse" type="unknown">
+            <node async_clock_name="CLOCK0_50" data_index="17" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[24]" storage_index="17" tap_mode="classic" trigger_index="17" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="16" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[23]" storage_index="16" tap_mode="classic" trigger_index="16" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="15" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[22]" storage_index="15" tap_mode="classic" trigger_index="15" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="14" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[21]" storage_index="14" tap_mode="classic" trigger_index="14" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="13" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[20]" storage_index="13" tap_mode="classic" trigger_index="13" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="11" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[19]" storage_index="11" tap_mode="classic" trigger_index="11" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="10" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[18]" storage_index="10" tap_mode="classic" trigger_index="10" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="9" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[17]" storage_index="9" tap_mode="classic" trigger_index="9" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="8" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[16]" storage_index="8" tap_mode="classic" trigger_index="8" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="7" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[15]" storage_index="7" tap_mode="classic" trigger_index="7" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="6" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[14]" storage_index="6" tap_mode="classic" trigger_index="6" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="5" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[13]" storage_index="5" tap_mode="classic" trigger_index="5" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="4" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[12]" storage_index="4" tap_mode="classic" trigger_index="4" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="3" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[11]" storage_index="3" tap_mode="classic" trigger_index="3" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="2" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[10]" storage_index="2" tap_mode="classic" trigger_index="2" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="25" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[9]" storage_index="25" tap_mode="classic" trigger_index="25" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="24" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[8]" storage_index="24" tap_mode="classic" trigger_index="24" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="23" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[7]" storage_index="23" tap_mode="classic" trigger_index="23" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="22" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[6]" storage_index="22" tap_mode="classic" trigger_index="22" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="21" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[5]" storage_index="21" tap_mode="classic" trigger_index="21" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="20" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[4]" storage_index="20" tap_mode="classic" trigger_index="20" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="19" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[3]" storage_index="19" tap_mode="classic" trigger_index="19" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="18" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[2]" storage_index="18" tap_mode="classic" trigger_index="18" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="12" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[1]" storage_index="12" tap_mode="classic" trigger_index="12" type="unknown"/>
+            <node async_clock_name="CLOCK0_50" data_index="1" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[0]" storage_index="1" tap_mode="classic" trigger_index="1" type="unknown"/>
+          </node>
+          <node async_clock_name="CLOCK0_50" data_index="26" dni_checkpoint="elaborated" dni_object_type="port" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|led_q" storage_index="26" tap_mode="classic" trigger_index="26" type="unknown"/>
+          <node async_clock_name="" data_index="0" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_async="true" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="rst" storage_index="0" tap_mode="classic" trigger_index="0" type="unknown"/>
+          <node async_clock_name="CLOCK0_50" data_index="27" dni_checkpoint="elaborated" dni_object_type="instance" duplicate_name_allowed="false" is_data_input="true" is_node_valid="false" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_sync_key|d_sync_q[1]" storage_index="27" tap_mode="classic" trigger_index="27" type="unknown"/>
+        </unified_setup_data_view>
+        <data_view>
+          <bus async_clock_name="clk_50" is_async="false" is_selected="false" level-0="alt_or" name="u_blink_50|cnt_q[24..0]" order="msb_to_lsb" state="collapse" type="unknown">
+            <net async_clock_name="CLOCK0_50" data_index="17" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[24]" storage_index="17" tap_mode="classic" trigger_index="17" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="16" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[23]" storage_index="16" tap_mode="classic" trigger_index="16" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="15" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[22]" storage_index="15" tap_mode="classic" trigger_index="15" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="14" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[21]" storage_index="14" tap_mode="classic" trigger_index="14" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="13" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[20]" storage_index="13" tap_mode="classic" trigger_index="13" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="11" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[19]" storage_index="11" tap_mode="classic" trigger_index="11" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="10" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[18]" storage_index="10" tap_mode="classic" trigger_index="10" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="9" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[17]" storage_index="9" tap_mode="classic" trigger_index="9" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="8" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[16]" storage_index="8" tap_mode="classic" trigger_index="8" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="7" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[15]" storage_index="7" tap_mode="classic" trigger_index="7" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="6" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[14]" storage_index="6" tap_mode="classic" trigger_index="6" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="5" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[13]" storage_index="5" tap_mode="classic" trigger_index="5" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="4" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[12]" storage_index="4" tap_mode="classic" trigger_index="4" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="3" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[11]" storage_index="3" tap_mode="classic" trigger_index="3" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="2" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[10]" storage_index="2" tap_mode="classic" trigger_index="2" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="25" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[9]" storage_index="25" tap_mode="classic" trigger_index="25" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="24" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[8]" storage_index="24" tap_mode="classic" trigger_index="24" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="23" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[7]" storage_index="23" tap_mode="classic" trigger_index="23" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="22" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[6]" storage_index="22" tap_mode="classic" trigger_index="22" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="21" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[5]" storage_index="21" tap_mode="classic" trigger_index="21" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="20" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[4]" storage_index="20" tap_mode="classic" trigger_index="20" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="19" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[3]" storage_index="19" tap_mode="classic" trigger_index="19" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="18" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[2]" storage_index="18" tap_mode="classic" trigger_index="18" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="12" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[1]" storage_index="12" tap_mode="classic" trigger_index="12" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="1" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[0]" storage_index="1" tap_mode="classic" trigger_index="1" type="unknown"/>
+          </bus>
+          <net async_clock_name="CLOCK0_50" data_index="26" dni_checkpoint="elaborated" dni_object_type="port" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|led_q" storage_index="26" tap_mode="classic" trigger_index="26" type="unknown"/>
+          <net async_clock_name="" data_index="0" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_async="true" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="rst" storage_index="0" tap_mode="classic" trigger_index="0" type="unknown"/>
+          <net async_clock_name="CLOCK0_50" data_index="27" dni_checkpoint="elaborated" dni_object_type="instance" duplicate_name_allowed="false" is_data_input="true" is_node_valid="false" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_sync_key|d_sync_q[1]" storage_index="27" tap_mode="classic" trigger_index="27" type="unknown"/>
+        </data_view>
+        <setup_view>
+          <bus async_clock_name="clk_50" is_async="false" is_selected="false" level-0="alt_or" name="u_blink_50|cnt_q[24..0]" order="msb_to_lsb" state="collapse" type="unknown">
+            <net async_clock_name="CLOCK0_50" data_index="17" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[24]" storage_index="17" tap_mode="classic" trigger_index="17" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="16" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[23]" storage_index="16" tap_mode="classic" trigger_index="16" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="15" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[22]" storage_index="15" tap_mode="classic" trigger_index="15" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="14" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[21]" storage_index="14" tap_mode="classic" trigger_index="14" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="13" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[20]" storage_index="13" tap_mode="classic" trigger_index="13" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="11" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[19]" storage_index="11" tap_mode="classic" trigger_index="11" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="10" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[18]" storage_index="10" tap_mode="classic" trigger_index="10" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="9" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[17]" storage_index="9" tap_mode="classic" trigger_index="9" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="8" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[16]" storage_index="8" tap_mode="classic" trigger_index="8" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="7" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[15]" storage_index="7" tap_mode="classic" trigger_index="7" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="6" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[14]" storage_index="6" tap_mode="classic" trigger_index="6" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="5" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[13]" storage_index="5" tap_mode="classic" trigger_index="5" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="4" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[12]" storage_index="4" tap_mode="classic" trigger_index="4" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="3" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[11]" storage_index="3" tap_mode="classic" trigger_index="3" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="2" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[10]" storage_index="2" tap_mode="classic" trigger_index="2" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="25" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[9]" storage_index="25" tap_mode="classic" trigger_index="25" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="24" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[8]" storage_index="24" tap_mode="classic" trigger_index="24" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="23" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[7]" storage_index="23" tap_mode="classic" trigger_index="23" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="22" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[6]" storage_index="22" tap_mode="classic" trigger_index="22" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="21" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[5]" storage_index="21" tap_mode="classic" trigger_index="21" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="20" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[4]" storage_index="20" tap_mode="classic" trigger_index="20" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="19" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[3]" storage_index="19" tap_mode="classic" trigger_index="19" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="18" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[2]" storage_index="18" tap_mode="classic" trigger_index="18" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="12" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[1]" storage_index="12" tap_mode="classic" trigger_index="12" type="unknown"/>
+            <net async_clock_name="CLOCK0_50" data_index="1" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|cnt_q[0]" storage_index="1" tap_mode="classic" trigger_index="1" type="unknown"/>
+          </bus>
+          <net async_clock_name="CLOCK0_50" data_index="26" dni_checkpoint="elaborated" dni_object_type="port" duplicate_name_allowed="false" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_blink_50|led_q" storage_index="26" tap_mode="classic" trigger_index="26" type="unknown"/>
+          <net async_clock_name="" data_index="0" dni_checkpoint="elaborated" dni_object_type="net" duplicate_name_allowed="false" is_async="true" is_data_input="true" is_node_valid="true" is_selected="false" is_storage_input="true" is_trigger_input="true" name="rst" storage_index="0" tap_mode="classic" trigger_index="0" type="unknown"/>
+          <net async_clock_name="CLOCK0_50" data_index="27" dni_checkpoint="elaborated" dni_object_type="instance" duplicate_name_allowed="false" is_data_input="true" is_node_valid="false" is_selected="false" is_storage_input="true" is_trigger_input="true" name="u_sync_key|d_sync_q[1]" storage_index="27" tap_mode="classic" trigger_index="27" type="unknown"/>
+        </setup_view>
+        <trigger_in_editor/>
+        <trigger_out_editor/>
+      </presentation>
+      <trigger CRC="66AD77C4" attribute_mem_mode="false" gap_record="true" name="trigger: 2026-10-10 20:50:42  #1" position="pre" power_up_trigger_mode="false" record_data_gap="true" segment_size="256" storage_mode="off" storage_qualifier_disabled="no" storage_qualifier_port_is_pin="true" storage_qualifier_port_name="auto_stp_external_storage_qualifier" storage_qualifier_port_tap_mode="classic" trigger_type="circular">
         <power_up_trigger position="pre" storage_qualifier_disabled="no"/>
         <events use_custom_flow_control="no">
           <level enabled="yes" name="condition1" type="basic">
@@ -244,10 +481,11 @@
     <single attribute="lock mode" value="0"/>
     <multi attribute="frame size" size="2" value="1920,1009"/>
     <single attribute="connection widget visible" value="1"/>
-    <multi attribute="connection widget size" size="2" value="398,225"/>
+    <multi attribute="connection widget size" size="2" value="784,225"/>
     <single attribute="instance widget visible" value="1"/>
     <single attribute="config widget visible" value="1"/>
     <single attribute="hierarchy widget visible" value="1"/>
     <single attribute="data log widget visible" value="1"/>
   </global_info>
+  <static_plugin_mnemonics/>
 </session>
