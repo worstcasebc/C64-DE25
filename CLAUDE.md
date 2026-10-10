@@ -24,7 +24,8 @@ lauffähiges, testbares System.
 - **FPGA-Speicher:** 1 GB LPDDR4 (32 bit) + 128 MB SDRAM (16 bit)
 - **Video:** HDMI 2.0 (bis 1080p)
 - **Sonstiges:** 2× 40-Pin-GPIO-Header, MIPI-Anschluss (2 Lanes), GbE, USB 2.0
-  Host (Type-C), UART-über-USB, microSD am HPS, 4 Taster, 4 Schalter, 8 LEDs,
+  Host (Type-C), UART-über-USB, microSD am HPS, 2 FPGA-Taster (KEY0/KEY1, weitere Taster sind HPS-Resets),
+  4 Schalter, 8 LEDs (low-aktiv),
   ADC-Header, QSPI-Flash, Onboard USB-Blaster III
 - **Zubehör:** Terasic D8M-Kameramodul, HDMI-Display, Breadboard, Sensoren
 
