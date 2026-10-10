@@ -27,3 +27,6 @@ quartus/ip/.qsys_edit/
 
 # Lokale Werkzeuge (cc65)
 tools/
+
+# Assembler-Erzeugnisse
+sw/asm/build/

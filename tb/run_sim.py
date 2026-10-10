@@ -55,6 +55,9 @@ def main() -> int:
     args = parser.parse_args()
 
     BUILD.mkdir(parents=True, exist_ok=True)
+    # Das ROM-Abbild wird von tb_soc_mini (und später Quartus) gelesen.
+    if subprocess.run([sys.executable, str(ROOT / "sw" / "py" / "build_rom.py")], cwd=ROOT).returncode != 0:
+        return 1
     names = args.testbench or [p.stem for p in sorted((ROOT / "tb").glob("tb_*.v"))]
 
     failed = [n for n in names if not run_tb(n)]

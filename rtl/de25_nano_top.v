@@ -1,13 +1,14 @@
-// de25_nano_top — Top-Level, Stand Meilenstein 2, Schritt 1 (UART-Sender).
+// de25_nano_top — Top-Level, Stand Meilenstein 2 (6502-Mini-System).
 //
 // Zweck:  Board-Test für Takt, Reset, PLL, Taster, Schalter und LEDs.
 //           LEDR[0]   1-Hz-Herzschlag aus clk_50  (Boardtakt)
 //           LEDR[4:1] Schalter SW[3:0]
-//           LEDR[5]   KEY1 gedrückt (sendet zugleich den UART-Testtext)
+//           LEDR[5]   KEY1 gedrückt
 //           LEDR[6]   2-Hz-Herzschlag aus clk_100 (PLL) — blinkt nur, wenn
 //                     die PLL eingerastet ist
 //           LEDR[7]   Reset aktiv (KEY0 gedrückt)
-//           FPGA_UART_TX  115200 Baud 8N1, über den FTDI-Chip am Type-C-Anschluss
+//           FPGA_UART_TX  Textausgabe des 6502-Programms, 115200 Baud 8N1,
+//                     über den FTDI-Chip am Type-C-Anschluss
 // Takte:  clk_50  = CLOCK0_50 (50 MHz, Boardoszillator)
 //         clk_100 = PLL-Ausgang (100 MHz, aus clk_50 abgeleitet)
 //         Übergänge zwischen den Domänen nur über sync_2ff.
@@ -19,7 +20,8 @@
 `default_nettype none
 
 module de25_nano_top #(
-    parameter BLINK_HALF_PERIOD = 25_000_000   // Takte pro halber Blinkperiode
+    parameter BLINK_HALF_PERIOD = 25_000_000,  // Takte pro halber Blinkperiode
+    parameter ROM_FILE          = "../sw/asm/build/hello.hex"
 ) (
     input  wire       CLOCK0_50,
     input  wire [1:0] KEY,
@@ -76,27 +78,16 @@ module de25_nano_top #(
         .led_q (heartbeat_50_q)
     );
 
-    // UART-Testtext bei jedem Druck auf KEY1.
-    wire [7:0] tx_data;
-    wire       tx_valid;
-    wire       tx_ready;
-
-    uart_hello u_uart_hello (
+    // Mini-Rechner: 6502 + RAM + ROM, Textausgabe über den UART.
+    // ROM-Pfad relativ zum Quartus-Projektverzeichnis (quartus/).
+    soc_mini #(
+        .ROM_FILE          (ROM_FILE),
+        .CPU_DIV           (50),    // 50 MHz / 50  = 1 MHz CPU-Schritte
+        .UART_CLKS_PER_BIT (434)    // 50 MHz / 434 = 115200 Baud
+    ) u_soc_mini (
         .clk      (clk_50),
         .rst      (rst),
-        .start    (key_q[1]),
-        .tx_data  (tx_data),
-        .tx_valid (tx_valid),
-        .tx_ready (tx_ready)
-    );
-
-    uart_tx #(.CLKS_PER_BIT(434)) u_uart_tx (   // 50 MHz / 115200 Baud
-        .clk   (clk_50),
-        .rst   (rst),
-        .data  (tx_data),
-        .valid (tx_valid),
-        .ready (tx_ready),
-        .txd_q (FPGA_UART_TX)
+        .uart_txd (FPGA_UART_TX)
     );
 
     // --- Domäne clk_100 -----------------------------------------------------
