@@ -19,7 +19,7 @@
 module uart_rx_check #(
     parameter               BIT_NS   = 80,
     parameter               LEN      = 1,
-    parameter [8*59-1:0]    EXPECTED = 0
+    parameter [8*LEN-1:0]   EXPECTED = 0
 ) (
     input  wire        rxd,
     output reg         done,
@@ -58,9 +58,9 @@ endmodule
 module tb_soc_mini;
 
     localparam CLKS_PER_BIT = 4;
-    localparam LEN          = 59;
+    localparam LEN          = 56;   // muss zur Länge von EXPECTED passen
     localparam [8*LEN-1:0] EXPECTED =
-        "6502 laeuft auf dem DE25-Nano\015\nZaehler: $00\015\nZaehler: $01\015\n";
+        "CPU 6502 auf dem DE25-Nano\015\nZaehler: $00\015\nZaehler: $01\015\n";
 
     reg  clk = 1'b0;
     reg  rst = 1'b1;

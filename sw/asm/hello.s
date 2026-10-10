@@ -1,7 +1,7 @@
 ; hello.s — erstes Programm für das Mini-System (Meilenstein 2).
 ;
 ; Gibt nach dem Reset eine Begrüßung aus und zählt dann sichtbar hoch:
-;   6502 laeuft auf dem DE25-Nano
+;   CPU 6502 auf dem DE25-Nano
 ;   Zaehler: $00
 ;   Zaehler: $01
 ;   ...
@@ -88,7 +88,7 @@ irq_nmi:
         rti
 
 .rodata
-banner:     .byte "6502 laeuft auf dem DE25-Nano", $0D, $0A, 0
+banner:     .byte "CPU 6502 auf dem DE25-Nano", $0D, $0A, 0
 label:      .byte "Zaehler: $", 0
 hexdigits:  .byte "0123456789ABCDEF"
 
