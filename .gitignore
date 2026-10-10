@@ -1,0 +1,21 @@
+# Simulation
+tb/build/
+
+# Quartus-Erzeugnisse
+quartus/qdb/
+quartus/tmp-clearbox/
+quartus/output_files/
+quartus/dni/
+quartus/*.qws
+quartus/*.rpt
+quartus/*.summary
+quartus/*.bak
+
+# ROMs (Urheberrecht) — nur README und .gitignore bleiben im Repo
+roms/*
+!roms/README.md
+!roms/.gitignore
+
+# Python / Editor
+__pycache__/
+.vscode/
