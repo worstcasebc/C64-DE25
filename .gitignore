@@ -19,3 +19,8 @@ roms/*
 # Python / Editor
 __pycache__/
 .vscode/
+
+# Generierte IP-Ausgaben (die .ip-Dateien selbst bleiben im Repo)
+quartus/ip/*/
+quartus/ip/**/*.bak
+quartus/ip/.qsys_edit/

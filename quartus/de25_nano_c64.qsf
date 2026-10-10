@@ -52,3 +52,5 @@ set_instance_assignment -name IO_STANDARD "1.1 V" -to LEDR[7]
 set_global_assignment -name PWRMGT_VOLTAGE_OUTPUT_FORMAT "LINEAR FORMAT"
 set_global_assignment -name PWRMGT_LINEAR_FORMAT_N "-12"
 set_global_assignment -name LAST_QUARTUS_VERSION "26.1.0 Pro Edition"
+set_global_assignment -name IP_FILE ip/pll_sys.ip
+set_global_assignment -name IP_FILE ip/reset_release.ip
