@@ -19,7 +19,8 @@ lauffähiges, testbares System.
 ## Hardware
 
 - **Board:** Terasic DE25-Nano
-- **FPGA:** Intel Agilex 5 E-Series SoC (A5EB013BB23BE4SR1, ca. 130k LE)
+- **FPGA:** Intel Agilex 5 E-Series SoC (A5EB013BB23BE4SCS laut Terasic golden_top; das User Manual nennt
+  noch …E4SR1; ca. 130k LE)
 - **HPS:** Arm Cortex 2× A76 + 2× A55, 1 GB LPDDR4 (mit FPGA geteilt)
 - **FPGA-Speicher:** 1 GB LPDDR4 (32 bit) + 128 MB SDRAM (16 bit)
 - **Video:** HDMI 2.0 (bis 1080p)

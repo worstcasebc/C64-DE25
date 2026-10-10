@@ -82,5 +82,8 @@ ebenfalls keine Treiberstärke/Slew-Rate/Terminierung — die Quartus-Warnung
 25315 ist also auch im Referenzprojekt vorhanden. Die LEDs heißen dort `LED`
 statt `LEDR` (Handbuch).
 
-**Offen — Device-Bezeichnung:** Handbuch (auch revB) und unser Projekt nennen
-`A5EB013BB23BE4SR1`, 12 von 13 Terasic-Demos dagegen `A5EB013BB23BE4SCS`.
+**Device-Bezeichnung:** Das Handbuch (auch revB) nennt `A5EB013BB23BE4SR1`,
+12 von 13 Terasic-Demos dagegen `A5EB013BB23BE4SCS`. Das Projekt nutzt seit
+Meilenstein 2 `…E4SCS`: Der Bitstream läuft auf dem Board (UART-Empfangstest),
+und Quartus 26.1 hat dafür endgültige statt vorläufiger Timing-Daten. Mit
+`…E4SR1` lief das Design ebenfalls.
