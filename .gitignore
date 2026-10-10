@@ -24,3 +24,6 @@ __pycache__/
 quartus/ip/*/
 quartus/ip/**/*.bak
 quartus/ip/.qsys_edit/
+
+# Lokale Werkzeuge (cc65)
+tools/
