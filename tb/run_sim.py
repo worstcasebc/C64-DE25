@@ -29,7 +29,8 @@ def find_tool(name: str, fallback: Path) -> str:
     sys.exit(f"{name} nicht gefunden (weder im PATH noch unter {fallback})")
 
 
-def run_tb(name: str) -> bool:
+def run_tb(name: str, plusargs: tuple[str, ...] = ()) -> bool:
+    """Übersetzt und simuliert eine Testbench; plusargs gehen an die Simulation."""
     iverilog = find_tool("iverilog", ICARUS_DIR / "bin" / "iverilog.exe")
     vvp = find_tool("vvp", ICARUS_DIR / "bin" / "vvp.exe")
     rtl = [str(p.relative_to(ROOT)) for p in sorted((ROOT / "rtl").rglob("*.v"))]
@@ -45,7 +46,7 @@ def run_tb(name: str) -> bool:
         if comp.returncode != 0:
             return False
 
-    sim = subprocess.run([vvp, str(out)], cwd=ROOT, capture_output=True, text=True)
+    sim = subprocess.run([vvp, str(out), *plusargs], cwd=ROOT, capture_output=True, text=True)
     output = sim.stdout + sim.stderr
     print(output.strip())
     return sim.returncode == 0 and f"PASS: {name}" in output and "FAIL" not in output

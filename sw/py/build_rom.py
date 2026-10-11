@@ -1,7 +1,8 @@
 """Baut die ROMs: .s -> .o -> .bin -> .hex.
 
 Aufruf (aus dem Projektverzeichnis):
-    python sw/py/build_rom.py            baut alle Programme aus TARGETS
+    python sw/py/build_rom.py            baut alle Programme aus TARGETS und
+                                         wandelt die Original-ROMs aus roms/ um
     python sw/py/build_rom.py name       baut nur sw/asm/name.s
 
 Ergebnis in sw/asm/build/: <name>.bin (Rohdaten), <name>.map und <name>.lst
@@ -9,6 +10,11 @@ zum Nachlesen sowie je ROM eine Hex-Datei (ein Byte pro Zeile für $readmemh):
     hello     -> hello.hex                                  (Mini-System)
     banktest  -> banktest_basic.hex, banktest_char.hex,
                  banktest_kernal.hex                        (C64-Speicherkarte)
+
+Die Original-ROMs des C64 sind urheberrechtlich geschützt und liegen nur
+lokal in roms/ (siehe C64_ROMS). Sind sie vorhanden, entstehen daraus
+c64_basic.hex, c64_chargen.hex und c64_kernal.hex; fehlende werden mit
+einem Hinweis übersprungen.
 """
 import shutil
 import subprocess
@@ -26,6 +32,35 @@ TARGETS = {
     "hello": ("mini.cfg", [("", 0x2000)]),
     "banktest": ("c64.cfg", [("_basic", 0x2000), ("_char", 0x1000), ("_kernal", 0x2000)]),
 }
+
+
+# Original-ROMs: Name der Hex-Datei -> (Datei in roms/, Größe)
+C64_ROMS = {
+    "c64_basic": ("basic-901226-01.bin", 0x2000),
+    "c64_chargen": ("chargen-901225-01.bin", 0x1000),
+    "c64_kernal": ("kernal-901227-03.bin", 0x2000),
+}
+
+
+def write_hex(hex_file: Path, data: bytes) -> None:
+    hex_file.write_text("".join(f"{b:02X}\n" for b in data))
+
+
+def convert_c64_roms() -> list[Path]:
+    """Wandelt die vorhandenen Original-ROMs aus roms/ in Hex-Dateien um."""
+    BUILD.mkdir(parents=True, exist_ok=True)
+    hex_files = []
+    for name, (rom_name, size) in C64_ROMS.items():
+        rom = ROOT / "roms" / rom_name
+        if not rom.exists():
+            print(f"Hinweis: roms/{rom_name} fehlt, {name}.hex wird nicht erzeugt")
+            continue
+        data = rom.read_bytes()
+        if len(data) != size:
+            sys.exit(f"roms/{rom_name} hat {len(data)} Bytes, erwartet {size}")
+        write_hex(BUILD / f"{name}.hex", data)
+        hex_files.append(BUILD / f"{name}.hex")
+    return hex_files
 
 
 def find_tool(name: str) -> str:
@@ -66,7 +101,7 @@ def build(name: str) -> list[Path]:
     hex_files, offset = [], 0
     for suffix, size in roms:
         hex_file = BUILD / f"{name}{suffix}.hex"
-        hex_file.write_text("".join(f"{b:02X}\n" for b in data[offset:offset + size]))
+        write_hex(hex_file, data[offset:offset + size])
         hex_files.append(hex_file)
         offset += size
     return hex_files
@@ -77,5 +112,7 @@ if __name__ == "__main__":
         outs = [f for name in (sys.argv[1:] or TARGETS) for f in build(name)]
     except subprocess.CalledProcessError as err:
         sys.exit(err.returncode)
+    if len(sys.argv) == 1:
+        outs += convert_c64_roms()
     for out in outs:
         print(f"ROM gebaut: {out.relative_to(ROOT)}")
