@@ -15,6 +15,7 @@
 ;   RAM $D000  OK
 ;   RAM $E000  OK
 ;   CPU-PORT   OK
+;   CIA-IRQ    OK
 ; Im Fehlerfall steht statt OK der gelesene Wert: FEHLER $xx.
 ; Zum Schluss füllt es den Bildschirmspeicher: Titel in Zeile 0, ab Zeile 2
 ; alle 256 Zeichen in der Reihenfolge ihrer Codes, sonst Leerzeichen.
@@ -29,12 +30,17 @@ SCREEN   = $0400        ; Bildschirmspeicher, 40 x 25 Zeichen
 COLORS   = $D800        ; Farb-RAM, eine Farbe (0-15) pro Zeichen
 BORDER   = $D020        ; VIC: Rahmenfarbe
 BGCOLOR  = $D021        ; VIC: Hintergrundfarbe
+CIA_TALO = $DC04        ; CIA 1: Timer A, unteres Byte
+CIA_TAHI = $DC05        ; CIA 1: Timer A, oberes Byte
+CIA_ICR  = $DC0D        ; CIA 1: Interrupts melden/freigeben
+CIA_CRA  = $DC0E        ; CIA 1: Timer A steuern
 
 .zeropage
 got:        .res 1
 expected:   .res 1
 got_d000:   .res 1
 got_e000:   .res 1
+irq_count:  .res 1
 
 .segment "BASIC"
         .byte "B"       ; $A000
@@ -122,6 +128,44 @@ reset:
         lda PORT
         ldy #$37
         ldx #(t_port - text)
+        jsr report
+
+        ; Timer-Interrupt: Timer A läuft alle 101 Schritte ab und löst einen
+        ; IRQ aus; die Routine irq zählt mit. Drei Interrupts müssen kommen.
+        lda #0
+        sta irq_count
+        lda #100
+        sta CIA_TALO
+        lda #0
+        sta CIA_TAHI
+        lda #$81        ; Unterlauf von Timer A darf IRQ auslösen
+        sta CIA_ICR
+        lda #$11        ; Startwert laden und fortlaufend starten
+        sta CIA_CRA
+        cli             ; Interrupts zulassen
+        ldx #0
+        ldy #0
+@wait:
+        lda irq_count
+        cmp #3
+        bcs @enough
+        dex
+        bne @wait
+        dey
+        bne @wait       ; nach 65536 Runden aufgeben
+@enough:
+        sei
+        lda #$7F        ; alle Interrupts der CIA sperren
+        sta CIA_ICR
+        lda #0          ; Timer anhalten
+        sta CIA_CRA
+        lda irq_count
+        cmp #3
+        bcc @counted    ; weniger als 3: so melden
+        lda #3          ; 3 oder mehr gilt als bestanden
+@counted:
+        ldy #3
+        ldx #(t_irq - text)
         jsr report
 
         ; Farben: Rahmen hellblau (14), Hintergrund blau (6).
@@ -246,7 +290,16 @@ puthex:
         lda hexdigits,y
         jmp putc
 
-irq_nmi:
+; irq — Interrupt der CIA: quittieren (Lesen von ICR löscht die Meldung,
+; sonst käme der IRQ sofort wieder) und mitzählen.
+irq:
+        pha
+        lda CIA_ICR
+        inc irq_count
+        pla
+        rti
+
+nmi:
         rti
 
 .rodata
@@ -259,6 +312,7 @@ t_char:     .byte "CHAR-ROM   ", 0
 t_ram_d:    .byte "RAM $D000  ", 0
 t_ram_e:    .byte "RAM $E000  ", 0
 t_port:     .byte "CPU-PORT   ", 0
+t_irq:      .byte "CIA-IRQ    ", 0
 t_fail:     .byte "FEHLER $", 0
 t_ok:       .byte "OK"  ; läuft in t_eol weiter
 t_eol:      .byte $0D, $0A, 0
@@ -266,6 +320,6 @@ hexdigits:  .byte "0123456789ABCDEF"
 t_screen:   .byte "DE25-NANO C64 TEXTMODUS", 0
 
 .segment "VECTORS"
-        .word irq_nmi   ; $FFFA NMI
+        .word nmi       ; $FFFA NMI
         .word reset     ; $FFFC Reset
-        .word irq_nmi   ; $FFFE IRQ/BRK
+        .word irq       ; $FFFE IRQ/BRK

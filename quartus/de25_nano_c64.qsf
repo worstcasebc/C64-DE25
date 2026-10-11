@@ -12,6 +12,7 @@ set_global_assignment -name VERILOG_FILE ../rtl/io/blink.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/sync_2ff.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/uart_tx.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/i2c_write.v
+set_global_assignment -name VERILOG_FILE ../rtl/io/cia.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/video_timing.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/video_colorbars.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/video_text.v

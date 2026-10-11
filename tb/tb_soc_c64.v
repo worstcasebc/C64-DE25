@@ -2,9 +2,9 @@
 //
 // Lässt die Test-ROMs (sw/asm/banktest.s) laufen und prüft, dass am UART-Pin
 // genau der erwartete Text erscheint. Das Programm schaltet das Banking um
-// und meldet je Bereich OK oder den falsch gelesenen Wert. Damit sind CPU,
-// CPU-Port, Address-Decoder, RAM unter den ROMs und alle drei ROMs gemeinsam
-// getestet. Der Video-Anschluss bleibt hier unbenutzt (siehe tb_c64_video).
+// und meldet je Bereich OK oder den falsch gelesenen Wert; zuletzt zählt es
+// Timer-Interrupts der CIA. Damit sind CPU, CPU-Port, Address-Decoder, RAM
+// unter den ROMs, alle drei ROMs und der IRQ-Weg gemeinsam getestet. Der Video-Anschluss bleibt hier unbenutzt (siehe tb_c64_video).
 //
 // Zwei Instanzen laufen parallel: CPU_DIV = 1 (CPU in jedem Takt) und
 // CPU_DIV = 3 (Taktfreigabe jeden dritten Takt). Beide müssen denselben Text
@@ -16,7 +16,7 @@
 module tb_soc_c64;
 
     localparam CLKS_PER_BIT = 4;
-    localparam LEN          = 109;  // muss zur Länge von EXPECTED passen
+    localparam LEN          = 124;  // muss zur Länge von EXPECTED passen
     localparam [8*LEN-1:0] EXPECTED = {
         "C64-Speicherkarte\015\n",
         "BASIC-ROM  OK\015\n",
@@ -24,7 +24,8 @@ module tb_soc_c64;
         "CHAR-ROM   OK\015\n",
         "RAM $D000  OK\015\n",
         "RAM $E000  OK\015\n",
-        "CPU-PORT   OK\015\n"
+        "CPU-PORT   OK\015\n",
+        "CIA-IRQ    OK\015\n"
     };
 
     reg  clk = 1'b0;

@@ -1,8 +1,9 @@
 // soc_c64 — Rechner mit C64-Speicherkarte (Meilenstein 3).
 //
 // Zweck:  6502 + CPU-Port + 64 KB RAM + BASIC-/Char-/KERNAL-ROM mit Banking
-//         wie im C64. SID und CIAs fehlen noch; vom VIC-II gibt es nur die
-//         Farbregister (vic_stub). Dazu das Farb-RAM und der UART als
+//         wie im C64. Der SID fehlt noch; vom VIC-II gibt es nur die
+//         Farbregister (vic_stub), von den beiden CIAs nur die erste, und
+//         die vereinfacht (cia). Dazu das Farb-RAM und der UART als
 //         Debug-Ausgabe.
 //         Das Video (video_text) liest über einen zweiten Anschluss direkt
 //         aus RAM, Farb-RAM und Char-ROM, unabhängig von CPU und Banking —
@@ -19,6 +20,9 @@
 //         $D800-$DBFF: Farb-RAM, 1000 Zellen zu 4 Bit — die Farbe jedes
 //         Zeichens. Die oberen vier Bits lesen hier als 1 (im echten C64
 //         sind sie zufällig).
+//         $DC00-$DCFF: CIA 1, siehe cia. Ihr Interrupt geht an den IRQ der
+//         CPU. An den Ports hängt später die Tastatur; bis dahin liegen
+//         alle Leitungen auf 1 ("keine Taste gedrückt").
 //         Restliches I/O-Fenster: liest $FF.
 // Ports:  uart_txd — serielle Ausgabe, UART_CLKS_PER_BIT Takte pro Bit.
 //         vid_* — Lese-Anschluss für das Video: Adresse anlegen, Daten
@@ -72,6 +76,7 @@ module soc_c64 #(
     wire [7:0]  cpu_dout;
     wire        we;
     reg  [7:0]  cpu_din;
+    wire        cia1_irq;
 
     cpu_6502 u_cpu (
         .clk  (clk),
@@ -81,7 +86,7 @@ module soc_c64 #(
         .din  (cpu_din),
         .dout (cpu_dout),
         .we   (we),
-        .irq  (1'b0),
+        .irq  (cia1_irq),
         .nmi  (1'b0)
     );
 
@@ -112,6 +117,7 @@ module soc_c64 #(
     wire sel_uart  = sel_io & (addr[11:8] == 4'hE);    // $DE00-$DEFF
     wire sel_vic   = sel_io & (addr[11:10] == 2'b00);  // $D000-$D3FF
     wire sel_color = sel_io & (addr[11:10] == 2'b10);  // $D800-$DBFF
+    wire sel_cia1  = sel_io & (addr[11:8] == 4'hC);    // $DC00-$DCFF
 
     // --- CPU-Port -----------------------------------------------------------
     wire [7:0] port_dout;
@@ -201,6 +207,30 @@ module soc_c64 #(
         .b_dout_q (vid_color_dout)
     );
 
+    // --- CIA 1 --------------------------------------------------------------
+    wire [7:0] cia1_dout;
+    wire [7:0] cia1_pa_out;
+    wire [7:0] cia1_pb_out;
+
+    cia u_cia1 (
+        .clk    (clk),
+        .rst    (rst),
+        .en     (cpu_en_q),
+        .sel    (sel_cia1),
+        .we     (we),
+        .addr   (addr[3:0]),
+        .din    (cpu_dout),
+        .dout_q (cia1_dout),
+        .irq    (cia1_irq),
+        .pa_out (cia1_pa_out),
+        .pb_out (cia1_pb_out),
+        .pa_in  (8'hFF),
+        .pb_in  (8'hFF)
+    );
+
+    // Die Port-Ausgänge werden erst mit der Tastatur gebraucht.
+    wire unused_cia1 = &{cia1_pa_out, cia1_pb_out};
+
     // --- UART-Register ------------------------------------------------------
     wire uart_ready;
 
@@ -225,6 +255,7 @@ module soc_c64 #(
     reg sel_uart_q;
     reg sel_vic_q;
     reg sel_color_q;
+    reg sel_cia1_q;
     reg uart_ready_q;
 
     always @(posedge clk) begin
@@ -237,6 +268,7 @@ module soc_c64 #(
             sel_uart_q   <= sel_uart;
             sel_vic_q    <= sel_vic;
             sel_color_q  <= sel_color;
+            sel_cia1_q   <= sel_cia1;
             uart_ready_q <= uart_ready;
         end
     end
@@ -250,6 +282,7 @@ module soc_c64 #(
         else if (sel_uart_q)   cpu_din = {uart_ready_q, 7'b0};
         else if (sel_vic_q)    cpu_din = vic_dout;
         else if (sel_color_q)  cpu_din = {4'hF, color_dout};
+        else if (sel_cia1_q)   cpu_din = cia1_dout;
         else                   cpu_din = 8'hFF;   // I/O-Fenster ohne Baustein
     end
 
