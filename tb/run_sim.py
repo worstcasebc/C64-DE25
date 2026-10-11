@@ -8,10 +8,11 @@ Aufruf (aus dem Projektverzeichnis):
 Jede Testbench muss am Ende "PASS: <name>" ausgeben; jede Zeile mit "FAIL"
 gilt als Fehler. Wellenformen landen in tb/build/<name>.vcd.
 
-Normalerweise läuft Icarus. Icarus kann aber kein VHDL; Testbenches, die den
-VIC-II aus FPGA64 (rtl/video/vendor/fpga64/*.vhd) brauchen, tragen deshalb
-die Zeile "// Simulator: Questa" und laufen über Questa (im Quartus-Paket
-enthalten), das Verilog und VHDL gemeinsam simuliert.
+Normalerweise läuft Icarus. Icarus kann aber kein VHDL und liest hier kein
+SystemVerilog; Testbenches, die den VIC-II aus FPGA64 (rtl/**/*.vhd) oder
+den SID aus MiSTer (rtl/**/*.sv) brauchen, tragen deshalb die Zeile
+"// Simulator: Questa" und laufen über Questa (im Quartus-Paket enthalten),
+das alle drei Sprachen gemeinsam simuliert.
 """
 import argparse
 import shutil
@@ -44,6 +45,7 @@ def run_tb_questa(name: str, rtl: list[str], helpers: list[str], plusargs: tuple
     """Übersetzt VHDL und Verilog in eine Questa-Bibliothek und simuliert."""
     tool = {t: find_tool(t, QUESTA_DIR / f"{t}.exe") for t in ("vlib", "vcom", "vlog", "vsim")}
     vhdl = [str(p.relative_to(ROOT)) for p in sorted((ROOT / "rtl").rglob("*.vhd"))]
+    sysv = [str(p.relative_to(ROOT)) for p in sorted((ROOT / "rtl").rglob("*.sv"))]
     work = BUILD / "questa" / name
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
@@ -54,6 +56,7 @@ def run_tb_questa(name: str, rtl: list[str], helpers: list[str], plusargs: tuple
     steps = [
         [tool["vlib"], lib],
         [tool["vcom"], "-2008", "-quiet", "-work", lib, *vhdl],
+        [tool["vlog"], "-sv", "-quiet", "-work", lib, *sysv],
         [tool["vlog"], "-quiet", "-work", lib, f"tb/{name}.v", *helpers, *rtl],
     ]
     for cmd in steps:
