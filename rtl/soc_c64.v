@@ -1,9 +1,10 @@
-// soc_c64 — der C64-Rechner: CPU, Speicher mit Banking, VIC-II, zwei CIAs.
+// soc_c64 — der C64-Rechner: CPU, Speicher mit Banking, VIC-II, SID, zwei CIAs.
 //
 // Zweck:  6502 + CPU-Port + 64 KB RAM + BASIC-/Char-/KERNAL-ROM + Farb-RAM,
-//         der VIC-II aus FPGA64 (rtl/video/vendor/fpga64), CIA 1 mit
-//         Tastatur und CIA 2 für die Speicherbank des VIC-II. Der SID fehlt
-//         noch; der UART bei $DE00 dient als Debug-Ausgabe.
+//         der VIC-II aus FPGA64 (rtl/video/vendor/fpga64), der SID aus
+//         MiSTer (rtl/audio/vendor/mister_sid), CIA 1 mit Tastatur und
+//         CIA 2 für die Speicherbank des VIC-II. Der UART bei $DE00 dient
+//         als Debug-Ausgabe.
 // Takt:   clk (eine Domäne), synchroner Reset rst (aktiv high).
 //         Ein CPU-Takt des C64 besteht aus 8 Pixeln, jedes Pixel aus
 //         PIX_DIV Systemtakten (auf dem Board 4: 31,5 MHz / 32 = 984 kHz;
@@ -25,6 +26,7 @@
 //         ganze CPU-Hälfte lang sehen will.
 //         Speicherkarte siehe c64_addr_decode, Banking siehe cpu_port.
 //           $D000-$D3FF  VIC-II (Register alle 64 Adressen wiederholt)
+//           $D400-$D7FF  SID (Register alle 32 Adressen wiederholt)
 //           $D800-$DBFF  Farb-RAM, 4 Bit; obere Bits lesen als 1
 //           $DC00-$DCFF  CIA 1: Tastatur, Timer; ihr Interrupt geht an den
 //                        IRQ der CPU
@@ -42,6 +44,11 @@
 //         pix_en = 1 für einen Takt pro Pixel; dazu vic_color (Farbnummer
 //         0..15) und vic_hblank/vic_vblank (1 in der Zeilen- bzw.
 //         Bildlücke). Das ist ein PAL-Raster: 504 Pixel, 312 Zeilen.
+//         sid_audio — Tonsignal des SID mit Vorzeichen; ein neuer Wert pro
+//         CPU-Takt, gültig bei cpu_tick = 1.
+// SID:    Er braucht mindestens 16 Systemtakte pro CPU-Takt, um Ton zu
+//         berechnen, also PIX_DIV >= 2. Mit PIX_DIV = 1 funktionieren nur
+//         seine Registerzugriffe.
 
 `default_nettype none
 
@@ -64,7 +71,9 @@ module soc_c64 #(
     output wire        pix_en,
     output wire [3:0]  vic_color,
     output wire        vic_hblank,
-    output wire        vic_vblank
+    output wire        vic_vblank,
+    output wire [17:0] sid_audio,
+    output wire        cpu_tick
 );
 
     // --- Phasen innerhalb eines CPU-Takts -----------------------------------
@@ -107,7 +116,8 @@ module soc_c64 #(
     reg dma_wr_q;       // dieser Takt gehört dem Lader
     reg tick_q;         // ein CPU-Takt ist vergangen (auch wenn die CPU steht)
 
-    assign dma_ack = dma_wr_q;
+    assign dma_ack  = dma_wr_q;
+    assign cpu_tick = tick_q;
 
     always @(posedge clk) begin
         if (rst) begin
@@ -165,6 +175,7 @@ module soc_c64 #(
     );
 
     wire sel_vic   = sel_io & (addr[11:10] == 2'b00);  // $D000-$D3FF
+    wire sel_sid   = sel_io & (addr[11:10] == 2'b01);  // $D400-$D7FF
     wire sel_color = sel_io & (addr[11:10] == 2'b10);  // $D800-$DBFF
     wire sel_cia1  = sel_io & (addr[11:8] == 4'hC);    // $DC00-$DCFF
     wire sel_cia2  = sel_io & (addr[11:8] == 4'hD);    // $DD00-$DDFF
@@ -326,6 +337,45 @@ module soc_c64 #(
         .addrValid   ()
     );
 
+    // --- SID ----------------------------------------------------------------
+    // Ein SID vom Typ 6581 mit eingeschaltetem Filter. Die Eingänge für
+    // Paddles (pot_*), externen Ton (ext_in) und das Nachladen von
+    // Filterkurven (ld_*) bleiben unbenutzt; die Anschlüsse mit _r gehören
+    // zu einem zweiten SID, den es hier nicht gibt (DUAL = 0).
+    wire [7:0]  sid_dout;
+    wire [17:0] sid_audio_r_unused;
+
+    sid_top #(
+        .MULTI_FILTERS (0),
+        .DUAL          (0)
+    ) u_sid (
+        .reset       (rst),
+        .clk         (clk),
+        .ce_1m       (tick_q),
+        .cs          (cpu_en_q & sel_sid),
+        .we          (we),
+        .addr        (addr[4:0]),
+        .data_in     (cpu_dout),
+        .data_out    (sid_dout),
+        .fc_offset_l (13'd0),
+        .pot_x_l     (8'hFF),
+        .pot_y_l     (8'hFF),
+        .ext_in_l    (18'd0),
+        .audio_l     (sid_audio),
+        .fc_offset_r (13'd0),
+        .pot_x_r     (8'hFF),
+        .pot_y_r     (8'hFF),
+        .ext_in_r    (18'd0),
+        .audio_r     (sid_audio_r_unused),
+        .filter_en   (1'b1),
+        .mode        (1'b0),
+        .cfg         (2'b00),
+        .ld_clk      (1'b0),
+        .ld_addr     (12'd0),
+        .ld_data     (16'd0),
+        .ld_wr       (1'b0)
+    );
+
     // --- 50-Hz-Takt für die Uhren der CIAs ----------------------------------
     // Im Original kommt er aus dem Stromnetz; hier wird er aus dem CPU-Takt
     // abgezählt.
@@ -434,6 +484,7 @@ module soc_c64 #(
     reg sel_kernal_q;
     reg sel_uart_q;
     reg sel_vic_q;
+    reg sel_sid_q;
     reg sel_color_q;
     reg sel_cia1_q;
     reg sel_cia2_q;
@@ -448,6 +499,7 @@ module soc_c64 #(
             sel_kernal_q <= sel_kernal;
             sel_uart_q   <= sel_uart;
             sel_vic_q    <= sel_vic;
+            sel_sid_q    <= sel_sid;
             sel_color_q  <= sel_color;
             sel_cia1_q   <= sel_cia1;
             sel_cia2_q   <= sel_cia2;
@@ -463,6 +515,7 @@ module soc_c64 #(
         else if (sel_kernal_q) cpu_din = kernal_dout;
         else if (sel_uart_q)   cpu_din = {uart_ready_q, 7'b0};
         else if (sel_vic_q)    cpu_din = vic_dout_q;
+        else if (sel_sid_q)    cpu_din = sid_dout;
         else if (sel_color_q)  cpu_din = {4'hF, color_dout};
         else if (sel_cia1_q)   cpu_din = cia1_dout;
         else if (sel_cia2_q)   cpu_din = cia2_dout;

@@ -29,6 +29,7 @@ UART     = $DE00        ; schreiben: Byte senden; lesen: Bit 7 = Sender frei
 RAMCODE  = $0200        ; hierhin wird ramcode kopiert
 SCREEN   = $0400        ; Bildschirmspeicher, 40 x 25 Zeichen
 COLORS   = $D800        ; Farb-RAM, eine Farbe (0-15) pro Zeichen
+SID_VOL  = $D418        ; SID: Lautstärke (untere 4 Bit) und Filterart
 VIC_CR1  = $D011        ; VIC: Bit 4 Bildschirm an, Bit 3 25 Zeilen, Bit 0-2 Feinverschiebung
 VIC_CR2  = $D016        ; VIC: Bit 3 40 Spalten
 VIC_MEM  = $D018        ; VIC: wo Bildschirmspeicher und Zeichensatz liegen
@@ -213,6 +214,12 @@ reset:
         ldy #3
         ldx #(t_nmi - text)
         jsr report
+
+        ; SID: volle Lautstärke, wie es das KERNAL beim Start einstellt. Das
+        ; Register lässt sich nicht zurücklesen; die Testbench schaut nach,
+        ; ob der Wert beim SID angekommen ist.
+        lda #$0F
+        sta SID_VOL
 
         ; VIC-II einstellen wie das KERNAL: Textbildschirm an, 25 Zeilen,
         ; 40 Spalten, Bildschirmspeicher $0400, Zeichensatz $1000 (Char-ROM).

@@ -17,6 +17,10 @@
 // 64 Bytes nach $C000 (dort arbeitet das Programm nicht). Geprüft wird, dass
 // sie im RAM ankommen und die CPU trotz der ausgesetzten Schritte denselben
 // Text ausgibt.
+//
+// Vom SID wird hier nur geprüft, dass ein Schreibzugriff auf $D418 bei ihm
+// ankommt; seinen Ton prüft tb_sid_tone. Mit PIX_DIV = 1 hat er zu wenige
+// Takte, um Ton zu berechnen.
 
 `timescale 1ns / 1ps
 `default_nettype none
@@ -61,7 +65,9 @@ module tb_soc_c64;
         .pix_en     (),
         .vic_color  (),
         .vic_hblank (),
-        .vic_vblank ()
+        .vic_vblank (),
+        .sid_audio  (),
+        .cpu_tick   ()
     );
 
     uart_rx_check #(.BIT_NS(CLKS_PER_BIT * 20), .LEN(LEN), .EXPECTED(EXPECTED)) rx (
@@ -101,6 +107,14 @@ module tb_soc_c64;
                          dut.u_ram.mem[16'hC000 + k], 8'h80 + k[7:0]);
                 dma_errors = dma_errors + 1;
             end
+        end
+
+        // Zugriff auf den SID: Das Programm schreibt $0F nach $D418. Das
+        // Register lässt sich nicht zurücklesen, deshalb der Blick hinein.
+        repeat (200_000) @(posedge clk);
+        if (dut.u_sid.Filter_Mode_Vol[0] !== 8'h0F) begin
+            $display("FAIL: SID-Register $18 ist %h, erwartet 0f", dut.u_sid.Filter_Mode_Vol[0]);
+            dma_errors = dma_errors + 1;
         end
 
         if (errors + dma_errors == 0) $display("PASS: tb_soc_c64");

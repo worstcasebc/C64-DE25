@@ -81,7 +81,9 @@ module tb_c64_video;
         .pix_en     (pix_en),
         .vic_color  (vic_color),
         .vic_hblank (vic_hblank),
-        .vic_vblank (vic_vblank)
+        .vic_vblank (vic_vblank),
+        .sid_audio  (),
+        .cpu_tick   ()
     );
 
     // type_data/type_valid spielen den UART-Empfänger.
