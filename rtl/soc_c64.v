@@ -30,7 +30,7 @@
 //           $D000-$D3FF  VIC-II (Register alle 64 Adressen wiederholt)
 //           $D400-$D7FF  SID (Register alle 32 Adressen wiederholt)
 //           $D800-$DBFF  Farb-RAM, 4 Bit; obere Bits lesen als 1
-//           $DC00-$DCFF  CIA 1: Tastatur, Timer; ihr Interrupt geht an den
+//           $DC00-$DCFF  CIA 1 (aus MiSTer, taktgenau): Tastatur, Timer; ihr Interrupt geht an den
 //                        IRQ der CPU
 //           $DD00-$DDFF  CIA 2: Port A Bit 0/1 (invertiert) wählen, welches
 //                        16-KB-Viertel des Speichers der VIC-II sieht; ihr
@@ -413,65 +413,99 @@ module soc_c64 #(
         end
     end
 
-    // --- CIA 1: Tastatur und Timer-Interrupt --------------------------------
+    // --- Die beiden CIAs (aus MiSTer, rtl/io/vendor/mister_cia) -------------
+    // Sie arbeiten in zwei Schritten pro CPU-Takt:
+    //   phi2_n  Buszugriff der CPU, zu Beginn der CPU-Hälfte (wie cpu_en_q,
+    //           aber in jedem Takt — ob die CPU zugreift, sagt cs_n)
+    //   phi2_p  Timer zählen, direkt nachdem die CPU ihren Schritt gemacht hat
+    // Die Timer laufen also auch, wenn der VIC-II die CPU anhält.
+    wire cia_phi2_n = tick_q;
+    reg  cia_phi2_p_q;
+
+    always @(posedge clk) begin
+        if (rst) cia_phi2_p_q <= 1'b0;
+        else     cia_phi2_p_q <= sub_last && (pix_q == 3'd7);
+    end
+
+    // CIA 1: Tastatur und Timer; Interrupt an den IRQ.
+    // An den Ports zählt der Pegel der Leitung: was die CIA selbst ausgibt,
+    // verknüpft mit dem, was von außen kommt (hier das Tastaturgitter).
     wire [7:0] cia1_dout;
     wire [7:0] cia1_pa_out;
     wire [7:0] cia1_pb_out;
-    wire [7:0] cia1_pb_in;
+    wire [7:0] cia1_pb_keys;
+    wire       cia1_irq_n;
 
     key_matrix u_key_matrix (
         .keys (keys),
         .pa   (cia1_pa_out),
-        .pb   (cia1_pb_in)
+        .pb   (cia1_pb_keys)
     );
 
-    cia u_cia1 (
-        .clk      (clk),
-        .rst      (rst),
-        .tick     (tick_q),
-        .tod_tick (tod_tick_q),
-        .en     (cpu_en_q),
-        .sel    (sel_cia1),
-        .we     (we),
-        .addr   (addr[3:0]),
-        .din    (cpu_dout),
-        .dout_q (cia1_dout),
-        .irq    (cia1_irq),
-        .pa_out (cia1_pa_out),
-        .pb_out (cia1_pb_out),
-        .pa_in  (8'hFF),
-        .pb_in  (cia1_pb_in),
-        .flag_n (1'b1)
+    mos6526 u_cia1 (
+        .mode    (1'b0),            // 6526 (die ältere Bauart)
+        .clk     (clk),
+        .phi2_p  (cia_phi2_p_q),
+        .phi2_n  (cia_phi2_n),
+        .res_n   (~rst),
+        .cs_n    (~(cpu_en_q & sel_cia1)),
+        .rw      (~we),
+        .rs      (addr[3:0]),
+        .db_in   (cpu_dout),
+        .db_out  (cia1_dout),
+        .pa_in   (cia1_pa_out),
+        .pa_out  (cia1_pa_out),
+        .pa_oe   (),
+        .pb_in   (cia1_pb_out & cia1_pb_keys),
+        .pb_out  (cia1_pb_out),
+        .pb_oe   (),
+        .flag_n  (1'b1),
+        .pc_n    (),
+        .tod     (tod_tick_q),
+        .sp_in   (1'b1),
+        .sp_out  (),
+        .cnt_in  (1'b1),
+        .cnt_out (),
+        .irq_n   (cia1_irq_n)
     );
 
-    // --- CIA 2: Speicherbank des VIC-II, Interrupt an den NMI ---------------
+    assign cia1_irq = ~cia1_irq_n;
+
+    // CIA 2: Speicherbank des VIC-II; Interrupt an den NMI.
     wire [7:0] cia2_dout;
     wire [7:0] cia2_pa_out;
     wire [7:0] cia2_pb_out;
+    wire       cia2_irq_n;
 
-    cia u_cia2 (
-        .clk      (clk),
-        .rst      (rst),
-        .tick     (tick_q),
-        .tod_tick (tod_tick_q),
-        .en     (cpu_en_q),
-        .sel    (sel_cia2),
-        .we     (we),
-        .addr   (addr[3:0]),
-        .din    (cpu_dout),
-        .dout_q (cia2_dout),
-        .irq    (cia2_irq),
-        .pa_out (cia2_pa_out),
-        .pb_out (cia2_pb_out),
-        .pa_in  (8'hFF),
-        .pb_in  (8'hFF),
-        .flag_n (1'b1)
+    mos6526 u_cia2 (
+        .mode    (1'b0),
+        .clk     (clk),
+        .phi2_p  (cia_phi2_p_q),
+        .phi2_n  (cia_phi2_n),
+        .res_n   (~rst),
+        .cs_n    (~(cpu_en_q & sel_cia2)),
+        .rw      (~we),
+        .rs      (addr[3:0]),
+        .db_in   (cpu_dout),
+        .db_out  (cia2_dout),
+        .pa_in   (cia2_pa_out),
+        .pa_out  (cia2_pa_out),
+        .pa_oe   (),
+        .pb_in   (cia2_pb_out),
+        .pb_out  (cia2_pb_out),
+        .pb_oe   (),
+        .flag_n  (1'b1),
+        .pc_n    (),
+        .tod     (tod_tick_q),
+        .sp_in   (1'b1),
+        .sp_out  (),
+        .cnt_in  (1'b1),
+        .cnt_out (),
+        .irq_n   (cia2_irq_n)
     );
 
+    assign cia2_irq = ~cia2_irq_n;
     assign vic_bank = ~cia2_pa_out[1:0];
-
-    // Nicht benutzte Ausgänge der CIAs.
-    wire unused_cia = &{cia1_pb_out, cia2_pa_out[7:2], cia2_pb_out};
 
     // --- UART-Register ------------------------------------------------------
     wire uart_ready;

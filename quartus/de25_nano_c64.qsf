@@ -12,7 +12,7 @@ set_global_assignment -name VERILOG_FILE ../rtl/io/blink.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/sync_2ff.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/uart_tx.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/i2c_write.v
-set_global_assignment -name VERILOG_FILE ../rtl/io/cia.v
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/io/vendor/mister_cia/mos6526.sv
 set_global_assignment -name VERILOG_FILE ../rtl/io/uart_rx.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/key_matrix.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/ascii_key_typer.v
