@@ -7,7 +7,8 @@
 // 2. Alle 256 Zeichen ab Zeile 2: Im Test-Char-ROM ist das Muster jedes
 //    Zeichens sein eigener Code, also lässt sich jedes Pixel nachrechnen —
 //    richtige Zelle, richtige Pixelzeile, richtiges Bit, doppelte Größe.
-// 3. Titel in Zeile 0 und Leerzeichen in der letzten Zelle.
+// 3. Titel in Zeile 0 (weiß, also über das Farb-RAM anders gefärbt) und
+//    Leerzeichen in der letzten Zelle.
 // Das Bild wird außerdem als tb/build/tb_c64_video.ppm gespeichert.
 //
 // Mit Plusargs lässt sich dieselbe Testbench für Bildschirmfotos anderer
@@ -21,7 +22,8 @@
 
 module tb_c64_video;
 
-    localparam [23:0] BORDER = 24'h6C5EB5, BG = 24'h352879, FG = 24'h6C5EB5;
+    localparam [23:0] BORDER = 24'h6C5EB5, BG = 24'h352879, FG = 24'h6C5EB5,
+                      WHITE  = 24'hFFFFFF;
     localparam        W = 640, H = 480;
 
     reg  clk = 1'b0;
@@ -35,8 +37,12 @@ module tb_c64_video;
     wire        vsync;
     wire [15:0] vid_ram_addr;
     wire [7:0]  vid_ram_dout;
+    wire [9:0]  vid_color_addr;
+    wire [3:0]  vid_color_dout;
     wire [11:0] vid_char_addr;
     wire [7:0]  vid_char_dout;
+    wire [3:0]  border_color;
+    wire [3:0]  bg_color;
     wire [7:0]  r;
     wire [7:0]  g;
     wire [7:0]  b;
@@ -48,14 +54,18 @@ module tb_c64_video;
     integer errors = 0;
 
     soc_c64 #(.CPU_DIV(1), .UART_CLKS_PER_BIT(4)) dut (
-        .clk           (clk),
-        .rst           (rst),
-        .uart_txd      (uart_txd),
-        .vid_en        (pix_en),
-        .vid_ram_addr  (vid_ram_addr),
-        .vid_ram_dout  (vid_ram_dout),
-        .vid_char_addr (vid_char_addr),
-        .vid_char_dout (vid_char_dout)
+        .clk            (clk),
+        .rst            (rst),
+        .uart_txd       (uart_txd),
+        .vid_en         (pix_en),
+        .vid_ram_addr   (vid_ram_addr),
+        .vid_ram_dout   (vid_ram_dout),
+        .vid_color_addr (vid_color_addr),
+        .vid_color_dout (vid_color_dout),
+        .vid_char_addr  (vid_char_addr),
+        .vid_char_dout  (vid_char_dout),
+        .border_color   (border_color),
+        .bg_color       (bg_color)
     );
 
     video_timing u_timing (
@@ -70,23 +80,27 @@ module tb_c64_video;
     );
 
     video_text u_text (
-        .clk       (clk),
-        .en        (pix_en),
-        .x         (x),
-        .y         (y),
-        .de        (de),
-        .hsync     (hsync),
-        .vsync     (vsync),
-        .ram_addr  (vid_ram_addr),
-        .ram_dout  (vid_ram_dout),
-        .char_addr (vid_char_addr),
-        .char_dout (vid_char_dout),
-        .r_q       (r),
-        .g_q       (g),
-        .b_q       (b),
-        .de_q      (de_out),
-        .hsync_q   (hsync_out),
-        .vsync_q   (vsync_out)
+        .clk          (clk),
+        .en           (pix_en),
+        .x            (x),
+        .y            (y),
+        .de           (de),
+        .hsync        (hsync),
+        .vsync        (vsync),
+        .border_color (border_color),
+        .bg_color     (bg_color),
+        .ram_addr     (vid_ram_addr),
+        .ram_dout     (vid_ram_dout),
+        .color_addr   (vid_color_addr),
+        .color_dout   (vid_color_dout),
+        .char_addr    (vid_char_addr),
+        .char_dout    (vid_char_dout),
+        .r_q          (r),
+        .g_q          (g),
+        .b_q          (b),
+        .de_q         (de_out),
+        .hsync_q      (hsync_out),
+        .vsync_q      (vsync_out)
     );
 
     always #10 clk = ~clk;
@@ -126,14 +140,14 @@ module tb_c64_video;
 
     // Prüft eine Pixelzeile eines Zeichens: 8 Pixel, jedes 2x2 Bildpunkte.
     task expect_cell_line(input integer col, input integer row, input integer line,
-                          input [7:0] pattern);
+                          input [7:0] pattern, input [23:0] fg);
         integer px, dx, dy;
         begin
             for (px = 0; px < 8; px = px + 1)
                 for (dx = 0; dx < 2; dx = dx + 1)
                     for (dy = 0; dy < 2; dy = dy + 1)
                         expect_pixel(col * 16 + px * 2 + dx, 40 + row * 16 + line * 2 + dy,
-                                     pattern[7 - px] ? FG : BG);
+                                     pattern[7 - px] ? fg : BG);
         end
     endtask
 
@@ -184,14 +198,14 @@ module tb_c64_video;
                 pos = 80 + code;
                 for (line = 0; line < 8; line = line + 1)
                     expect_cell_line(pos % 40, pos / 40, line,
-                                     (code == 0) ? ((line == 0) ? 8'h43 : 8'h00) : code[7:0]);
+                                     (code == 0) ? ((line == 0) ? 8'h43 : 8'h00) : code[7:0], FG);
             end
 
             // 3. Titel "DE25-..." (D = 4, E = 5, 2 = $32) und Leerzeichen
-            expect_cell_line(0,  0,  3, 8'h04);
-            expect_cell_line(1,  0,  3, 8'h05);
-            expect_cell_line(2,  0,  3, 8'h32);
-            expect_cell_line(39, 24, 7, 8'h20);
+            expect_cell_line(0,  0,  3, 8'h04, WHITE);
+            expect_cell_line(1,  0,  3, 8'h05, WHITE);
+            expect_cell_line(2,  0,  3, 8'h32, WHITE);
+            expect_cell_line(39, 24, 7, 8'h20, FG);
         end
 
         if (errors == 0) $display("PASS: tb_c64_video");

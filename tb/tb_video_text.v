@@ -1,14 +1,16 @@
 // tb_video_text — selbstprüfende Testbench für video_text.
 //
 // video_timing liefert ein vollständiges Bild. Statt echter Speicher hängen
-// zwei Rechenmodelle an den Anschlüssen: Der "Bildschirmspeicher" liefert
-// einen Zeichencode, der aus der Adresse berechnet wird, das "Char-ROM" ein
-// Muster aus Code und Pixelzeile. Die Testbench rechnet für jedes Pixel
+// drei Rechenmodelle an den Anschlüssen: Der "Bildschirmspeicher" liefert
+// einen Zeichencode, der aus der Adresse berechnet wird, das "Farb-RAM" eine
+// Farbe aus der Zellennummer, das "Char-ROM" ein Muster aus Code und
+// Pixelzeile. Die Testbench rechnet für jedes Pixel
 // unabhängig aus, welche Farbe herauskommen muss, und vergleicht:
 // 1. Rahmenfarbe oberhalb/unterhalb des Textbereichs, Schwarz außerhalb des
 //    sichtbaren Bildes.
 // 2. Im Textbereich: richtiges Zeichen (Adresse), richtige Pixelzeile und
-//    richtiges Bit — jeweils in doppelter Größe.
+//    richtiges Bit — jeweils in doppelter Größe — und die Farbe der Zelle
+//    aus dem Farb-RAM, übersetzt in RGB.
 // 3. de/hsync/vsync kommen passend zur Farbe drei Pixeltakte später.
 // 4. Die Bildschirmadresse bleibt im Bereich $0400-$07E7.
 // en wechselt wie im Top-Level in jedem Takt (Pixeltakt = halber Takt).
@@ -18,7 +20,7 @@
 
 module tb_video_text;
 
-    localparam [23:0] BORDER = 24'h6C5EB5, BG = 24'h352879, FG = 24'h6C5EB5;
+    localparam [3:0] BORDER_COLOR = 4'd2, BG_COLOR = 4'd11;
 
     reg         clk = 1'b0;
     reg         rst = 1'b1;
@@ -30,6 +32,8 @@ module tb_video_text;
     wire        vsync;
     wire [15:0] ram_addr;
     reg  [7:0]  ram_dout = 8'h00;
+    wire [9:0]  color_addr;
+    reg  [3:0]  color_dout = 4'h0;
     wire [11:0] char_addr;
     reg  [7:0]  char_dout = 8'h00;
     wire [7:0]  r;
@@ -55,23 +59,27 @@ module tb_video_text;
     );
 
     video_text dut (
-        .clk       (clk),
-        .en        (en),
-        .x         (x),
-        .y         (y),
-        .de        (de),
-        .hsync     (hsync),
-        .vsync     (vsync),
-        .ram_addr  (ram_addr),
-        .ram_dout  (ram_dout),
-        .char_addr (char_addr),
-        .char_dout (char_dout),
-        .r_q       (r),
-        .g_q       (g),
-        .b_q       (b),
-        .de_q      (de_out),
-        .hsync_q   (hsync_out),
-        .vsync_q   (vsync_out)
+        .clk          (clk),
+        .en           (en),
+        .x            (x),
+        .y            (y),
+        .de           (de),
+        .hsync        (hsync),
+        .vsync        (vsync),
+        .border_color (BORDER_COLOR),
+        .bg_color     (BG_COLOR),
+        .ram_addr     (ram_addr),
+        .ram_dout     (ram_dout),
+        .color_addr   (color_addr),
+        .color_dout   (color_dout),
+        .char_addr    (char_addr),
+        .char_dout    (char_dout),
+        .r_q          (r),
+        .g_q          (g),
+        .b_q          (b),
+        .de_q         (de_out),
+        .hsync_q      (hsync_out),
+        .vsync_q      (vsync_out)
     );
 
     always #10 clk = ~clk;
@@ -86,10 +94,37 @@ module tb_video_text;
         pattern_of = address[10:3] ^ {address[2:0], 5'b10110};
     endfunction
 
+    function [3:0] color_at(input [9:0] cell_no);
+        color_at = cell_no[3:0] ^ cell_no[7:4] ^ {2'b00, cell_no[9:8]};
+    endfunction
+
+    // Eigene Abschrift der Farbtabelle (Palette von Pepto)
+    function [23:0] rgb_of(input [3:0] color);
+        case (color)
+            4'd0:  rgb_of = 24'h000000;
+            4'd1:  rgb_of = 24'hFFFFFF;
+            4'd2:  rgb_of = 24'h68372B;
+            4'd3:  rgb_of = 24'h70A4B2;
+            4'd4:  rgb_of = 24'h6F3D86;
+            4'd5:  rgb_of = 24'h588D43;
+            4'd6:  rgb_of = 24'h352879;
+            4'd7:  rgb_of = 24'hB8C76F;
+            4'd8:  rgb_of = 24'h6F4F25;
+            4'd9:  rgb_of = 24'h433900;
+            4'd10: rgb_of = 24'h9A6759;
+            4'd11: rgb_of = 24'h444444;
+            4'd12: rgb_of = 24'h6C6C6C;
+            4'd13: rgb_of = 24'h9AD284;
+            4'd14: rgb_of = 24'h6C5EB5;
+            4'd15: rgb_of = 24'h959595;
+        endcase
+    endfunction
+
     always @(posedge clk) begin
         if (en) begin
-            ram_dout  <= code_at(ram_addr);
-            char_dout <= pattern_of(char_addr);
+            ram_dout   <= code_at(ram_addr);
+            color_dout <= color_at(color_addr);
+            char_dout  <= pattern_of(char_addr);
         end
     end
 
@@ -109,22 +144,23 @@ module tb_video_text;
     end
 
     function [23:0] expected_rgb(input [11:0] px, input [11:0] py, input visible);
-        integer    col, row, line, bit_no;
+        integer    col, row, line, bit_no, cell_no;
         reg [15:0] address;
         reg [7:0]  pattern;
         begin
             if (!visible) begin
                 expected_rgb = 24'h000000;
             end else if (py < 40 || py >= 440) begin
-                expected_rgb = BORDER;
+                expected_rgb = rgb_of(BORDER_COLOR);
             end else begin
                 col     = px / 16;
                 row     = (py - 40) / 16;
                 line    = ((py - 40) / 2) % 8;
                 bit_no  = 7 - (px / 2) % 8;
-                address = 16'h0400 + row * 40 + col;
+                cell_no = row * 40 + col;
+                address = 16'h0400 + cell_no;
                 pattern = pattern_of({1'b0, code_at(address), line[2:0]});
-                expected_rgb = pattern[bit_no] ? FG : BG;
+                expected_rgb = pattern[bit_no] ? rgb_of(color_at(cell_no[9:0])) : rgb_of(BG_COLOR);
             end
         end
     endfunction

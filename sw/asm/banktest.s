@@ -18,12 +18,17 @@
 ; Im Fehlerfall steht statt OK der gelesene Wert: FEHLER $xx.
 ; Zum Schluss füllt es den Bildschirmspeicher: Titel in Zeile 0, ab Zeile 2
 ; alle 256 Zeichen in der Reihenfolge ihrer Codes, sonst Leerzeichen.
+; Farben wie beim C64-Start (Rahmen und Schrift hellblau, Hintergrund blau),
+; nur der Titel ist weiß.
 
 PORT_DDR = $00          ; Richtungsregister des CPU-Ports
 PORT     = $01          ; Bit 0 LORAM, Bit 1 HIRAM, Bit 2 CHAREN
 UART     = $DE00        ; schreiben: Byte senden; lesen: Bit 7 = Sender frei
 RAMCODE  = $0200        ; hierhin wird ramcode kopiert
 SCREEN   = $0400        ; Bildschirmspeicher, 40 x 25 Zeichen
+COLORS   = $D800        ; Farb-RAM, eine Farbe (0-15) pro Zeichen
+BORDER   = $D020        ; VIC: Rahmenfarbe
+BGCOLOR  = $D021        ; VIC: Hintergrundfarbe
 
 .zeropage
 got:        .res 1
@@ -119,6 +124,12 @@ reset:
         ldx #(t_port - text)
         jsr report
 
+        ; Farben: Rahmen hellblau (14), Hintergrund blau (6).
+        lda #14
+        sta BORDER
+        lda #6
+        sta BGCOLOR
+
         ; Bildschirm löschen: 1000 Zeichen in vier Stücken zu je 256 (das
         ; letzte überlappt). Leerzeichen hat den Bildschirmcode $20.
         ldx #0
@@ -131,6 +142,16 @@ reset:
         inx
         bne @clear
 
+        ; Farb-RAM genauso füllen: alle Zeichen hellblau.
+        lda #14
+@colors:
+        sta COLORS,x
+        sta COLORS + $100,x
+        sta COLORS + $200,x
+        sta COLORS + $2E8,x
+        inx
+        bne @colors
+
         ; Titel in Zeile 0. Bildschirmcodes sind kein ASCII: A-Z haben die
         ; Codes 1-26; Ziffern und Satzzeichen bleiben gleich. "and #$3F"
         ; macht aus ASCII-Großbuchstaben den Bildschirmcode.
@@ -140,6 +161,8 @@ reset:
         beq @charset
         and #$3F
         sta SCREEN,x
+        lda #1          ; Titel in Weiß
+        sta COLORS,x
         inx
         bne @title
 

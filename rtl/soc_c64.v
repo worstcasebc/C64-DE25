@@ -1,11 +1,12 @@
 // soc_c64 — Rechner mit C64-Speicherkarte (Meilenstein 3).
 //
 // Zweck:  6502 + CPU-Port + 64 KB RAM + BASIC-/Char-/KERNAL-ROM mit Banking
-//         wie im C64. VIC-II, SID und CIAs fehlen noch; im I/O-Fenster sitzt
-//         vorerst nur der UART als Debug-Ausgabe.
+//         wie im C64. SID und CIAs fehlen noch; vom VIC-II gibt es nur die
+//         Farbregister (vic_stub). Dazu das Farb-RAM und der UART als
+//         Debug-Ausgabe.
 //         Das Video (video_text) liest über einen zweiten Anschluss direkt
-//         aus RAM und Char-ROM, unabhängig von CPU und Banking — so wie der
-//         VIC-II im echten C64.
+//         aus RAM, Farb-RAM und Char-ROM, unabhängig von CPU und Banking —
+//         so wie der VIC-II im echten C64.
 // Takt:   clk (eine Domäne), synchroner Reset rst (aktiv high). Die CPU und
 //         alles am Bus arbeiten nur in Takten mit cpu_en_q = 1, also jeden
 //         CPU_DIV-ten Takt (Default 50 MHz / 50 = 1 MHz).
@@ -14,12 +15,15 @@
 //         CPU-Port und sichtbarem I/O.
 //         $DE00-$DEFF schreiben: Byte senden. Lesen: Bit 7 = 1, wenn der
 //         Sender frei ist.
-//         $D000-$D3FF (später VIC-II): liest $00. Das Original-KERNAL wartet
-//         beim Start, bis das Raster-Register $D012 den Wert 0 hat.
+//         $D000-$D3FF: VIC-Register, siehe vic_stub.
+//         $D800-$DBFF: Farb-RAM, 1000 Zellen zu 4 Bit — die Farbe jedes
+//         Zeichens. Die oberen vier Bits lesen hier als 1 (im echten C64
+//         sind sie zufällig).
 //         Restliches I/O-Fenster: liest $FF.
 // Ports:  uart_txd — serielle Ausgabe, UART_CLKS_PER_BIT Takte pro Bit.
 //         vid_* — Lese-Anschluss für das Video: Adresse anlegen, Daten
 //         erscheinen einen Takt mit vid_en = 1 später.
+//         border_color/bg_color — Farbnummern aus $D020/$D021.
 
 `default_nettype none
 
@@ -36,8 +40,12 @@ module soc_c64 #(
     input  wire        vid_en,
     input  wire [15:0] vid_ram_addr,
     output wire [7:0]  vid_ram_dout,
+    input  wire [9:0]  vid_color_addr,
+    output wire [3:0]  vid_color_dout,
     input  wire [11:0] vid_char_addr,
-    output wire [7:0]  vid_char_dout
+    output wire [7:0]  vid_char_dout,
+    output wire [3:0]  border_color,
+    output wire [3:0]  bg_color
 );
 
     // --- Taktfreigabe für die CPU -------------------------------------------
@@ -101,8 +109,9 @@ module soc_c64 #(
         .sel_kernal (sel_kernal)
     );
 
-    wire sel_uart = sel_io & (addr[11:8] == 4'hE);     // $DE00-$DEFF
-    wire sel_vic  = sel_io & (addr[11:10] == 2'b00);   // $D000-$D3FF
+    wire sel_uart  = sel_io & (addr[11:8] == 4'hE);    // $DE00-$DEFF
+    wire sel_vic   = sel_io & (addr[11:10] == 2'b00);  // $D000-$D3FF
+    wire sel_color = sel_io & (addr[11:10] == 2'b10);  // $D800-$DBFF
 
     // --- CPU-Port -----------------------------------------------------------
     wire [7:0] port_dout;
@@ -163,6 +172,35 @@ module soc_c64 #(
         .dout_q (kernal_dout)
     );
 
+    // --- VIC-Register und Farb-RAM ------------------------------------------
+    wire [7:0] vic_dout;
+    wire [3:0] color_dout;
+
+    vic_stub u_vic_stub (
+        .clk            (clk),
+        .rst            (rst),
+        .en             (cpu_en_q),
+        .sel            (sel_vic),
+        .we             (we),
+        .addr           (addr[5:0]),
+        .din            (cpu_dout),
+        .dout_q         (vic_dout),
+        .border_color_q (border_color),
+        .bg_color_q     (bg_color)
+    );
+
+    ram_dp_sync #(.ADDR_W(10), .DATA_W(4)) u_color_ram (
+        .clk      (clk),
+        .a_en     (cpu_en_q),
+        .a_we     (we & sel_color),
+        .a_addr   (addr[9:0]),
+        .a_din    (cpu_dout[3:0]),
+        .a_dout_q (color_dout),
+        .b_en     (vid_en),
+        .b_addr   (vid_color_addr),
+        .b_dout_q (vid_color_dout)
+    );
+
     // --- UART-Register ------------------------------------------------------
     wire uart_ready;
 
@@ -186,6 +224,7 @@ module soc_c64 #(
     reg sel_kernal_q;
     reg sel_uart_q;
     reg sel_vic_q;
+    reg sel_color_q;
     reg uart_ready_q;
 
     always @(posedge clk) begin
@@ -197,6 +236,7 @@ module soc_c64 #(
             sel_kernal_q <= sel_kernal;
             sel_uart_q   <= sel_uart;
             sel_vic_q    <= sel_vic;
+            sel_color_q  <= sel_color;
             uart_ready_q <= uart_ready;
         end
     end
@@ -208,7 +248,8 @@ module soc_c64 #(
         else if (sel_char_q)   cpu_din = char_dout;
         else if (sel_kernal_q) cpu_din = kernal_dout;
         else if (sel_uart_q)   cpu_din = {uart_ready_q, 7'b0};
-        else if (sel_vic_q)    cpu_din = 8'h00;   // Platzhalter für den VIC-II
+        else if (sel_vic_q)    cpu_din = vic_dout;
+        else if (sel_color_q)  cpu_din = {4'hF, color_dout};
         else                   cpu_din = 8'hFF;   // I/O-Fenster ohne Baustein
     end
 

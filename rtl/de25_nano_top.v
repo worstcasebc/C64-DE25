@@ -116,8 +116,12 @@ module de25_nano_top #(
     // Char-ROM. ROM-Pfade relativ zum Quartus-Projektverzeichnis (quartus/).
     wire [15:0] vid_ram_addr;
     wire [7:0]  vid_ram_dout;
+    wire [9:0]  vid_color_addr;
+    wire [3:0]  vid_color_dout;
     wire [11:0] vid_char_addr;
     wire [7:0]  vid_char_dout;
+    wire [3:0]  border_color;
+    wire [3:0]  bg_color;
 
     soc_c64 #(
         .BASIC_FILE        (BASIC_FILE),
@@ -126,14 +130,18 @@ module de25_nano_top #(
         .CPU_DIV           (50),    // 50 MHz / 50  = 1 MHz CPU-Schritte
         .UART_CLKS_PER_BIT (434)    // 50 MHz / 434 = 115200 Baud
     ) u_soc_c64 (
-        .clk           (clk_50),
-        .rst           (rst),
-        .uart_txd      (FPGA_UART_TX),
-        .vid_en        (pix_en),
-        .vid_ram_addr  (vid_ram_addr),
-        .vid_ram_dout  (vid_ram_dout),
-        .vid_char_addr (vid_char_addr),
-        .vid_char_dout (vid_char_dout)
+        .clk            (clk_50),
+        .rst            (rst),
+        .uart_txd       (FPGA_UART_TX),
+        .vid_en         (pix_en),
+        .vid_ram_addr   (vid_ram_addr),
+        .vid_ram_dout   (vid_ram_dout),
+        .vid_color_addr (vid_color_addr),
+        .vid_color_dout (vid_color_dout),
+        .vid_char_addr  (vid_char_addr),
+        .vid_char_dout  (vid_char_dout),
+        .border_color   (border_color),
+        .bg_color       (bg_color)
     );
 
     // --- HDMI: C64-Textbildschirm oder Testbild ------------------------------
@@ -160,23 +168,27 @@ module de25_nano_top #(
     wire        text_vsync_q;
 
     video_text u_video_text (
-        .clk       (clk_50),
-        .en        (pix_en),
-        .x         (video_x),
-        .y         (video_y),
-        .de        (video_de),
-        .hsync     (video_hsync),
-        .vsync     (video_vsync),
-        .ram_addr  (vid_ram_addr),
-        .ram_dout  (vid_ram_dout),
-        .char_addr (vid_char_addr),
-        .char_dout (vid_char_dout),
-        .r_q       (text_rgb_q[23:16]),
-        .g_q       (text_rgb_q[15:8]),
-        .b_q       (text_rgb_q[7:0]),
-        .de_q      (text_de_q),
-        .hsync_q   (text_hsync_q),
-        .vsync_q   (text_vsync_q)
+        .clk          (clk_50),
+        .en           (pix_en),
+        .x            (video_x),
+        .y            (video_y),
+        .de           (video_de),
+        .hsync        (video_hsync),
+        .vsync        (video_vsync),
+        .border_color (border_color),
+        .bg_color     (bg_color),
+        .ram_addr     (vid_ram_addr),
+        .ram_dout     (vid_ram_dout),
+        .color_addr   (vid_color_addr),
+        .color_dout   (vid_color_dout),
+        .char_addr    (vid_char_addr),
+        .char_dout    (vid_char_dout),
+        .r_q          (text_rgb_q[23:16]),
+        .g_q          (text_rgb_q[15:8]),
+        .b_q          (text_rgb_q[7:0]),
+        .de_q         (text_de_q),
+        .hsync_q      (text_hsync_q),
+        .vsync_q      (text_vsync_q)
     );
 
     wire [23:0] bars_rgb_q;

@@ -37,25 +37,33 @@ module tb_soc_c64;
     wire [31:0] errors_div3;
 
     soc_c64 #(.CPU_DIV(1), .UART_CLKS_PER_BIT(CLKS_PER_BIT)) dut_div1 (
-        .clk           (clk),
-        .rst           (rst),
-        .uart_txd      (txd_div1),
-        .vid_en        (1'b0),
-        .vid_ram_addr  (16'h0000),
-        .vid_ram_dout  (),
-        .vid_char_addr (12'h000),
-        .vid_char_dout ()
+        .clk            (clk),
+        .rst            (rst),
+        .uart_txd       (txd_div1),
+        .vid_en         (1'b0),
+        .vid_ram_addr   (16'h0000),
+        .vid_ram_dout   (),
+        .vid_color_addr (10'h000),
+        .vid_color_dout (),
+        .vid_char_addr  (12'h000),
+        .vid_char_dout  (),
+        .border_color   (),
+        .bg_color       ()
     );
 
     soc_c64 #(.CPU_DIV(3), .UART_CLKS_PER_BIT(CLKS_PER_BIT)) dut_div3 (
-        .clk           (clk),
-        .rst           (rst),
-        .uart_txd      (txd_div3),
-        .vid_en        (1'b0),
-        .vid_ram_addr  (16'h0000),
-        .vid_ram_dout  (),
-        .vid_char_addr (12'h000),
-        .vid_char_dout ()
+        .clk            (clk),
+        .rst            (rst),
+        .uart_txd       (txd_div3),
+        .vid_en         (1'b0),
+        .vid_ram_addr   (16'h0000),
+        .vid_ram_dout   (),
+        .vid_color_addr (10'h000),
+        .vid_color_dout (),
+        .vid_char_addr  (12'h000),
+        .vid_char_dout  (),
+        .border_color   (),
+        .bg_color       ()
     );
 
     uart_rx_check #(.BIT_NS(CLKS_PER_BIT * 20), .LEN(LEN), .EXPECTED(EXPECTED)) rx_div1 (
