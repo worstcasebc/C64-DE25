@@ -7,7 +7,8 @@
 // 4. Einmal-Modus: genau ein Unterlauf, danach steht der Timer (Startbit 0).
 // 5. Zählerstand lässt sich lesen; "Startwert laden" (CRA Bit 4) wirkt
 //    sofort und wird nicht gespeichert.
-// 6. Bei en = 0 steht der Timer; ebenso nach dem Löschen des Startbits.
+// 6. Ohne tick steht der Timer; ebenso nach dem Löschen des Startbits.
+// tick und en sind hier dasselbe Signal: Die CPU ist nie angehalten.
 // 7. Ports: Ausgänge liefern das Register, Eingänge den Pegel am Pin.
 // 8. Schreiben ohne sel wird ignoriert.
 
@@ -39,6 +40,7 @@ module tb_cia;
     cia dut (
         .clk    (clk),
         .rst    (rst),
+        .tick   (en),
         .en     (en),
         .sel    (sel),
         .we     (we),

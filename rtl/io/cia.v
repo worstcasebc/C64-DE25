@@ -16,8 +16,11 @@
 //         Timer A zählt in jedem CPU-Schritt um 1 herunter. Bei 0 lädt er
 //         den Startwert neu und meldet einen Unterlauf; eine Periode dauert
 //         also Startwert + 1 Schritte.
-// Takt:   clk, synchroner Reset rst (aktiv high). Alles — auch der Timer —
-//         arbeitet nur in Takten mit en = 1 (ein CPU-Schritt).
+// Takt:   clk, synchroner Reset rst (aktiv high).
+//         tick = 1: ein CPU-Takt ist vergangen, der Timer zählt. Das
+//         geschieht auch, wenn die CPU gerade angehalten ist (der VIC-II
+//         hält nur die CPU an, nicht die Zeit).
+//         en = 1: die CPU greift in diesem Takt auf den Bus zu.
 // Bus:    sel = 1 bei der Adresse der CIA. Lesedaten liegen wie beim RAM
 //         einen Schritt später an dout_q an.
 // Ports:  irq = 1, solange ein freigegebenes Ereignis ansteht.
@@ -32,6 +35,7 @@
 module cia (
     input  wire       clk,
     input  wire       rst,
+    input  wire       tick,
     input  wire       en,
     input  wire       sel,
     input  wire       we,
@@ -62,8 +66,8 @@ module cia (
     wire ta_oneshot   = cra_q[3];
     wire ta_underflow = ta_start && (ta_q == 16'd0);
 
-    wire write = sel && we;
-    wire read  = sel && !we;
+    wire write = en && sel && we;
+    wire read  = en && sel && !we;
 
     assign irq    = |(icr_flag_q & icr_mask_q);
     assign pa_out = pra_q | ~ddra_q;
@@ -80,15 +84,17 @@ module cia (
             cra_q      <= 8'h00;
             icr_flag_q <= 5'b0;
             icr_mask_q <= 5'b0;
-        end else if (en) begin
+        end else begin
             // Timer A zählen
-            if (ta_start) ta_q <= ta_underflow ? ta_latch_q : ta_q - 1'b1;
-            if (ta_underflow && ta_oneshot) cra_q[0] <= 1'b0;
+            if (tick) begin
+                if (ta_start) ta_q <= ta_underflow ? ta_latch_q : ta_q - 1'b1;
+                if (ta_underflow && ta_oneshot) cra_q[0] <= 1'b0;
+            end
 
             // Lesen von ICR löscht die Meldungen; eine neue im selben
-            // Schritt bleibt erhalten.
+            // Takt bleibt erhalten.
             if (read && addr == REG_ICR) icr_flag_q <= 5'b0;
-            if (ta_underflow) icr_flag_q[0] <= 1'b1;
+            if (tick && ta_underflow) icr_flag_q[0] <= 1'b1;
 
             // Schreibzugriffe (haben Vorrang vor dem Zählen)
             if (write) begin
