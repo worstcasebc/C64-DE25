@@ -1,15 +1,23 @@
-// tb_c64_video — selbstprüfende Testbench für Rechner und Textmodus zusammen.
+// tb_c64_video — selbstprüfende Testbench für das Bild des C64-Rechners.
+// Simulator: Questa
 //
-// soc_c64 + video_timing + video_text, verdrahtet wie im Top-Level. Das
-// Testprogramm (sw/asm/banktest.s) füllt den Bildschirmspeicher; danach wird
-// ein vollständiges Bild aufgezeichnet und geprüft:
-// 1. Rahmenfarbe über und unter dem Textbereich.
+// soc_c64 mit dem echten VIC-II, dazu Lader, Warteschlange und Tipp-Modul wie
+// im Top-Level. Das Testprogramm (sw/asm/banktest.s) füllt den
+// Bildschirmspeicher; danach wird ein vollständiges VIC-Bild aufgezeichnet
+// (504 x 312 Pixel einschließlich der Lücken) und geprüft:
+// 1. Rahmenfarbe rund um das Textfenster.
 // 2. Alle 256 Zeichen ab Zeile 2: Im Test-Char-ROM ist das Muster jedes
 //    Zeichens sein eigener Code, also lässt sich jedes Pixel nachrechnen —
-//    richtige Zelle, richtige Pixelzeile, richtiges Bit, doppelte Größe.
+//    richtige Zelle, richtige Pixelzeile, richtiges Bit.
 // 3. Titel in Zeile 0 (weiß, also über das Farb-RAM anders gefärbt) und
 //    Leerzeichen in der letzten Zelle.
 // Das Bild wird außerdem als tb/build/tb_c64_video.ppm gespeichert.
+//
+// Gezählt wird wie in video_scandoubler: Pixel ab Beginn der Zeilenlücke,
+// Zeilen ab der ersten Zeile nach Beginn der Bildlücke. Das Textfenster
+// (320 x 200) beginnt dann bei WIN_X/WIN_Y.
+//
+// Der Rechner läuft mit PIX_DIV = 1 (8 Systemtakte pro CPU-Takt).
 //
 // Mit Plusargs lässt sich dieselbe Testbench für Bildschirmfotos anderer
 // ROMs nutzen (siehe tb/screenshot.py):
@@ -31,33 +39,13 @@
 
 module tb_c64_video;
 
-    localparam [23:0] BORDER = 24'h6C5EB5, BG = 24'h352879, FG = 24'h6C5EB5,
-                      WHITE  = 24'hFFFFFF;
-    localparam        W = 640, H = 480;
+    localparam W = 504, H = 312;        // ganzes VIC-Bild mit Lücken
+    localparam WIN_X = 140, WIN_Y = 62; // linke obere Ecke des Textfensters
+    localparam [3:0] BORDER = 4'd14, BG = 4'd6, FG = 4'd14, WHITE = 4'd1;
 
     reg  clk = 1'b0;
     reg  rst = 1'b1;
-    reg  pix_en = 1'b0;
 
-    wire [11:0] x;
-    wire [11:0] y;
-    wire        de;
-    wire        hsync;
-    wire        vsync;
-    wire [15:0] vid_ram_addr;
-    wire [7:0]  vid_ram_dout;
-    wire [9:0]  vid_color_addr;
-    wire [3:0]  vid_color_dout;
-    wire [11:0] vid_char_addr;
-    wire [7:0]  vid_char_dout;
-    wire [3:0]  border_color;
-    wire [3:0]  bg_color;
-    wire [7:0]  r;
-    wire [7:0]  g;
-    wire [7:0]  b;
-    wire        de_out;
-    wire        hsync_out;
-    wire        vsync_out;
     wire        uart_txd;
     wire [63:0] keys;
     wire        typer_busy;
@@ -74,33 +62,30 @@ module tb_c64_video;
     wire        loader_active;
     reg  [7:0]  type_data  = 8'h00;
     reg         type_valid = 1'b0;
+    wire        pix_en;
+    wire [3:0]  vic_color;
+    wire        vic_hblank;
+    wire        vic_vblank;
 
     integer errors = 0;
 
-    soc_c64 #(.CPU_DIV(1), .UART_CLKS_PER_BIT(4)) dut (
-        .clk            (clk),
-        .rst            (rst),
-        .uart_txd       (uart_txd),
-        .keys           (keys),
-        .dma_req        (dma_req),
-        .dma_addr       (dma_addr),
-        .dma_data       (dma_data),
-        .dma_ack        (dma_ack),
-        .vid_en         (pix_en),
-        .vid_ram_addr   (vid_ram_addr),
-        .vid_ram_dout   (vid_ram_dout),
-        .vid_color_addr (vid_color_addr),
-        .vid_color_dout (vid_color_dout),
-        .vid_char_addr  (vid_char_addr),
-        .vid_char_dout  (vid_char_dout),
-        .border_color   (border_color),
-        .bg_color       (bg_color)
+    soc_c64 #(.PIX_DIV(1), .UART_CLKS_PER_BIT(4)) dut (
+        .clk        (clk),
+        .rst        (rst),
+        .uart_txd   (uart_txd),
+        .keys       (keys),
+        .dma_req    (dma_req),
+        .dma_addr   (dma_addr),
+        .dma_data   (dma_data),
+        .dma_ack    (dma_ack),
+        .pix_en     (pix_en),
+        .vic_color  (vic_color),
+        .vic_hblank (vic_hblank),
+        .vic_vblank (vic_vblank)
     );
 
-    // Tastendauer passend zur Simulation: Die CPU läuft hier in jedem Takt,
-    // das KERNAL fragt die Tastatur also etwa alle 17000 Takte ab.
     // type_data/type_valid spielen den UART-Empfänger.
-    prg_loader #(.TIMEOUT_CLKS(1_000_000)) u_loader (
+    prg_loader #(.TIMEOUT_CLKS(8_000_000)) u_loader (
         .clk       (clk),
         .rst       (rst),
         .rx_data   (type_data),
@@ -125,7 +110,9 @@ module tb_c64_video;
         .empty  (fifo_empty)
     );
 
-    ascii_key_typer #(.PRESS_CLKS(40_000), .RELEASE_CLKS(40_000)) u_typer (
+    // Tastendauer passend zur Simulation: Das KERNAL fragt die Tastatur etwa
+    // alle 17000 CPU-Takte ab, hier also alle 136000 Systemtakte.
+    ascii_key_typer #(.PRESS_CLKS(320_000), .RELEASE_CLKS(320_000)) u_typer (
         .clk        (clk),
         .rst        (rst),
         .fifo_empty (fifo_empty),
@@ -135,96 +122,87 @@ module tb_c64_video;
         .keys       (keys)
     );
 
-    video_timing u_timing (
-        .clk   (clk),
-        .rst   (rst),
-        .en    (pix_en),
-        .x_q   (x),
-        .y_q   (y),
-        .de    (de),
-        .hsync (hsync),
-        .vsync (vsync)
-    );
-
-    video_text u_text (
-        .clk          (clk),
-        .en           (pix_en),
-        .x            (x),
-        .y            (y),
-        .de           (de),
-        .hsync        (hsync),
-        .vsync        (vsync),
-        .border_color (border_color),
-        .bg_color     (bg_color),
-        .ram_addr     (vid_ram_addr),
-        .ram_dout     (vid_ram_dout),
-        .color_addr   (vid_color_addr),
-        .color_dout   (vid_color_dout),
-        .char_addr    (vid_char_addr),
-        .char_dout    (vid_char_dout),
-        .r_q          (r),
-        .g_q          (g),
-        .b_q          (b),
-        .de_q         (de_out),
-        .hsync_q      (hsync_out),
-        .vsync_q      (vsync_out)
-    );
-
     always #10 clk = ~clk;
-    always @(posedge clk) pix_en <= rst ? 1'b0 : ~pix_en;
 
     // --- Bild aufzeichnen ---------------------------------------------------
-    reg [23:0] frame [0:W*H-1];
-    integer    n_pixels   = 0;
-    reg        capturing  = 1'b0;
-    reg        vsync_prev = 1'b0;
-    reg        armed      = 1'b0;   // 1: beim nächsten vsync beginnt die Aufnahme
+    reg [3:0] frame [0:W*H-1];
+    reg       hblank_prev  = 1'b0;
+    reg       vblank_prev  = 1'b0;
+    reg       frame_start  = 1'b0;  // die nächste Zeile ist Zeile 0
+    reg       armed        = 1'b0;  // 1: beim nächsten Bildanfang beginnt die Aufnahme
+    reg       capturing    = 1'b0;
+    reg       captured     = 1'b0;
+    integer   dot          = 0;
+    integer   line         = 0;
 
-    always @(negedge clk) begin
-        if (!pix_en) begin              // direkt nach einem Pixeltakt
-            if (armed && vsync_out && !vsync_prev) begin
-                capturing = 1'b1;
-                armed     = 1'b0;
+    always @(posedge clk) begin
+        if (pix_en) begin
+            if (vic_vblank && !vblank_prev) frame_start = 1'b1;
+            if (vic_hblank && !hblank_prev) begin
+                dot = 0;
+                if (frame_start) begin
+                    if (capturing) begin
+                        capturing = 1'b0;
+                        captured  = 1'b1;
+                    end else if (armed) begin
+                        capturing = 1'b1;
+                        armed     = 1'b0;
+                    end
+                    line        = 0;
+                    frame_start = 1'b0;
+                end else begin
+                    line = line + 1;
+                end
+            end else begin
+                dot = dot + 1;
             end
-            if (capturing && de_out && n_pixels < W * H) begin
-                frame[n_pixels] = {r, g, b};
-                n_pixels = n_pixels + 1;
-            end
-            vsync_prev = vsync_out;
+            if (capturing && dot < W && line < H) frame[line * W + dot] = vic_color;
+            hblank_prev = vic_hblank;
+            vblank_prev = vic_vblank;
         end
     end
 
     // --- Prüfhilfen ---------------------------------------------------------
-    task expect_pixel(input integer px, input integer py, input [23:0] want);
+    task expect_pixel(input integer px, input integer py, input [3:0] want);
         begin
             if (frame[py * W + px] !== want) begin
                 if (errors < 20)
-                    $display("FAIL: Pixel (%0d,%0d) ist %h, erwartet %h", px, py, frame[py * W + px], want);
+                    $display("FAIL: Pixel (%0d,%0d) hat Farbe %0d, erwartet %0d", px, py, frame[py * W + px], want);
                 errors = errors + 1;
             end
         end
     endtask
 
-    // Prüft eine Pixelzeile eines Zeichens: 8 Pixel, jedes 2x2 Bildpunkte.
-    task expect_cell_line(input integer col, input integer row, input integer line,
-                          input [7:0] pattern, input [23:0] fg);
-        integer px, dx, dy;
+    // Prüft eine Pixelzeile eines Zeichens im Textfenster.
+    task expect_cell_line(input integer col, input integer row, input integer char_line,
+                          input [7:0] pattern, input [3:0] fg);
+        integer px;
         begin
             for (px = 0; px < 8; px = px + 1)
-                for (dx = 0; dx < 2; dx = dx + 1)
-                    for (dy = 0; dy < 2; dy = dy + 1)
-                        expect_pixel(col * 16 + px * 2 + dx, 40 + row * 16 + line * 2 + dy,
-                                     pattern[7 - px] ? fg : BG);
+                expect_pixel(WIN_X + col * 8 + px, WIN_Y + row * 8 + char_line,
+                             pattern[7 - px] ? fg : BG);
         end
     endtask
+
+    // Farbnummer -> RGB über dieselbe Tabelle wie auf dem Board.
+    reg  [3:0]  pal_index = 4'd0;
+    wire [23:0] pal_rgb;
+
+    c64_palette u_palette (
+        .color (pal_index),
+        .rgb   (pal_rgb)
+    );
 
     task write_ppm;
         integer fd, i;
         begin
             fd = $fopen("tb/build/tb_c64_video.ppm", "w");
             $fwrite(fd, "P3\n%0d %0d\n255\n", W, H);
-            for (i = 0; i < W * H; i = i + 1)
-                $fwrite(fd, "%0d %0d %0d\n", frame[i][23:16], frame[i][15:8], frame[i][7:0]);
+            for (i = 0; i < W * H; i = i + 1) begin
+                pal_index = frame[i];
+                #1;
+                $fwrite(fd, "%0d %0d %0d\n", pal_rgb[23:16], pal_rgb[15:8], pal_rgb[7:0]);
+            end
             $fclose(fd);
         end
     endtask
@@ -234,7 +212,7 @@ module tb_c64_video;
     reg [8*128-1:0] type_text;
     integer         wait_clks;
     integer         after_clks;
-    integer         code, line, pos, n;
+    integer         code, char_line, pos, n;
 
     task type_char(input [7:0] ch);     // ein Byte "vom UART", danach kurze Pause
         begin
@@ -242,7 +220,7 @@ module tb_c64_video;
             type_data = ch; type_valid = 1'b1;
             @(negedge clk);
             type_valid = 1'b0;
-            repeat (6) @(negedge clk);
+            repeat (30) @(negedge clk);
         end
     endtask
 
@@ -250,7 +228,7 @@ module tb_c64_video;
     integer   load_len;
 
     initial begin
-        if (!$value$plusargs("wait=%d", wait_clks)) wait_clks = 100_000;
+        if (!$value$plusargs("wait=%d", wait_clks)) wait_clks = 800_000;
 
         // ROM-Inhalte ersetzen (nach dem $readmemh der ROM-Module selbst)
         #1;
@@ -258,7 +236,7 @@ module tb_c64_video;
         if ($value$plusargs("char=%s",   rom_file)) $readmemh(rom_file, dut.u_rom_char.mem);
         if ($value$plusargs("kernal=%s", rom_file)) $readmemh(rom_file, dut.u_rom_kernal.mem);
 
-        repeat (5) @(posedge clk);
+        repeat (20) @(posedge clk);
         @(negedge clk) rst = 1'b0;
 
         // Programm laufen lassen
@@ -273,7 +251,7 @@ module tb_c64_video;
 
         // Auf Wunsch tippen: Text steht rechtsbündig in type_text, davor Nullen
         if ($value$plusargs("type=%s", type_text)) begin
-            if (!$value$plusargs("after=%d", after_clks)) after_clks = 400_000;
+            if (!$value$plusargs("after=%d", after_clks)) after_clks = 3_200_000;
             for (n = 127; n >= 0; n = n - 1)
                 if (type_text[8*n +: 8] != 8'h00)
                     type_char(type_text[8*n +: 8] == "|" ? 8'h0D :
@@ -286,23 +264,22 @@ module tb_c64_video;
 
         // Ein ganzes Bild aufnehmen
         armed = 1'b1;
-        wait (n_pixels == W * H);
+        wait (captured);
         write_ppm;
 
         if (!$test$plusargs("nocheck")) begin
-            // 1. Rahmen
-            expect_pixel(0,   0,   BORDER);
-            expect_pixel(639, 0,   BORDER);
-            expect_pixel(320, 39,  BORDER);
-            expect_pixel(320, 440, BORDER);
-            expect_pixel(639, 479, BORDER);
+            // 1. Rahmen links, rechts, über und unter dem Textfenster
+            expect_pixel(WIN_X - 1,   WIN_Y + 100, BORDER);
+            expect_pixel(WIN_X + 320, WIN_Y + 100, BORDER);
+            expect_pixel(WIN_X + 160, WIN_Y - 1,   BORDER);
+            expect_pixel(WIN_X + 160, WIN_Y + 200, BORDER);
 
             // 2. Zeichen 0..255 ab Zelle 80 (Zeile 2)
             for (code = 0; code < 256; code = code + 1) begin
                 pos = 80 + code;
-                for (line = 0; line < 8; line = line + 1)
-                    expect_cell_line(pos % 40, pos / 40, line,
-                                     (code == 0) ? ((line == 0) ? 8'h43 : 8'h00) : code[7:0], FG);
+                for (char_line = 0; char_line < 8; char_line = char_line + 1)
+                    expect_cell_line(pos % 40, pos / 40, char_line,
+                                     (code == 0) ? ((char_line == 0) ? 8'h43 : 8'h00) : code[7:0], FG);
             end
 
             // 3. Titel "DE25-..." (D = 4, E = 5, 2 = $32) und Leerzeichen

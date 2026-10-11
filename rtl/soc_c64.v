@@ -1,41 +1,45 @@
-// soc_c64 — Rechner mit C64-Speicherkarte (Meilenstein 3).
+// soc_c64 — der C64-Rechner: CPU, Speicher mit Banking, VIC-II, zwei CIAs.
 //
-// Zweck:  6502 + CPU-Port + 64 KB RAM + BASIC-/Char-/KERNAL-ROM mit Banking
-//         wie im C64. Der SID fehlt noch; vom VIC-II gibt es nur die
-//         Farbregister (vic_stub), von den beiden CIAs nur die erste, und
-//         die vereinfacht (cia). Dazu das Farb-RAM und der UART als
-//         Debug-Ausgabe.
-//         Das Video (video_text) liest über einen zweiten Anschluss direkt
-//         aus RAM, Farb-RAM und Char-ROM, unabhängig von CPU und Banking —
-//         so wie der VIC-II im echten C64.
-// Takt:   clk (eine Domäne), synchroner Reset rst (aktiv high). Die CPU und
-//         alles am Bus arbeiten nur in Takten mit cpu_en_q = 1, also jeden
-//         CPU_DIV-ten Takt (Default 50 MHz / 50 = 1 MHz).
-// DMA:    Ein Lader (prg_loader) kann Bytes direkt ins RAM schreiben. Dafür
-//         bekommt statt der CPU einmal er den nächsten Schritt: Die CPU
-//         setzt einen Schritt aus und merkt davon nichts, weil ihre
-//         Lesedaten stehen bleiben. Geschrieben wird immer ins RAM, auch
-//         unter ROM und I/O.
-// Bus:    Speicherkarte siehe c64_addr_decode, Banking siehe cpu_port.
-//         Das RAM liegt unter allem: Schreiben geht immer ins RAM, außer bei
-//         CPU-Port und sichtbarem I/O.
-//         $DE00-$DEFF schreiben: Byte senden. Lesen: Bit 7 = 1, wenn der
-//         Sender frei ist.
-//         $D000-$D3FF: VIC-Register, siehe vic_stub.
-//         $D800-$DBFF: Farb-RAM, 1000 Zellen zu 4 Bit — die Farbe jedes
-//         Zeichens. Die oberen vier Bits lesen hier als 1 (im echten C64
-//         sind sie zufällig).
-//         $DC00-$DCFF: CIA 1, siehe cia. Ihr Interrupt geht an den IRQ der
-//         CPU. Zwischen Port A und Port B hängt die Tastatur (key_matrix).
-//         Restliches I/O-Fenster: liest $FF.
+// Zweck:  6502 + CPU-Port + 64 KB RAM + BASIC-/Char-/KERNAL-ROM + Farb-RAM,
+//         der VIC-II aus FPGA64 (rtl/video/vendor/fpga64), CIA 1 mit
+//         Tastatur und CIA 2 für die Speicherbank des VIC-II. Der SID fehlt
+//         noch; der UART bei $DE00 dient als Debug-Ausgabe.
+// Takt:   clk (eine Domäne), synchroner Reset rst (aktiv high).
+//         Ein CPU-Takt des C64 besteht aus 8 Pixeln, jedes Pixel aus
+//         PIX_DIV Systemtakten (auf dem Board 4: 31,5 MHz / 32 = 984 kHz;
+//         in der Simulation geht auch 1, das spart Rechenzeit).
+// Bus:    CPU und VIC-II teilen sich den Speicher wie zwei Köche eine
+//         Küche im Schichtbetrieb:
+//           Pixel 0-3 (phi = 0)  der VIC-II liest (Zeichen, Muster, Farbe)
+//           Pixel 4-7 (phi = 1)  die CPU ist dran — ein Schritt am Anfang
+//                                von Pixel 4
+//         Braucht der VIC-II mehr als seine halbe Schicht (in jeder achten
+//         Bildzeile holt er 40 Zeichencodes, außerdem Sprite-Daten), nimmt
+//         er die Leitung BA auf 0. Die CPU setzt dann ihre Schritte aus —
+//         außer Schreibzugriffe, die sie wie der echte 6510 noch zu Ende
+//         bringt. In dieser Zeit liest der VIC-II auch in der zweiten
+//         Hälfte.
+//         Die CPU spricht RAM, ROMs, CIAs usw. in ihrem Schritt an; die
+//         Antwort liest sie im nächsten Schritt. Für den VIC-II werden
+//         Adresse und Daten des Schritts festgehalten, weil er sie die
+//         ganze CPU-Hälfte lang sehen will.
+//         Speicherkarte siehe c64_addr_decode, Banking siehe cpu_port.
+//           $D000-$D3FF  VIC-II (Register alle 64 Adressen wiederholt)
+//           $D800-$DBFF  Farb-RAM, 4 Bit; obere Bits lesen als 1
+//           $DC00-$DCFF  CIA 1: Tastatur, Timer-Interrupt
+//           $DD00-$DDFF  CIA 2: Port A Bit 0/1 (invertiert) wählen, welches
+//                        16-KB-Viertel des Speichers der VIC-II sieht
+//           $DE00-$DEFF  UART: schreiben = senden, lesen Bit 7 = frei
+//         Der VIC-II sieht immer das RAM, nur bei $1000-$1FFF in den
+//         Vierteln 0 und 2 stattdessen das Char-ROM.
+// DMA:    Ein Lader (prg_loader) kann Bytes direkt ins RAM schreiben; er
+//         bekommt dafür einmal den Schritt der CPU.
 // Ports:  uart_txd — serielle Ausgabe, UART_CLKS_PER_BIT Takte pro Bit.
-//         vid_* — Lese-Anschluss für das Video: Adresse anlegen, Daten
-//         erscheinen einen Takt mit vid_en = 1 später.
-//         border_color/bg_color — Farbnummern aus $D020/$D021.
-//         keys — gedrückte Tasten, synchron zu clk; Nummerierung siehe
-//         key_matrix.
-//         dma_* — dma_req = 1 mit Adresse und Daten anlegen und halten, bis
-//         dma_ack = 1 (ein Takt) das Schreiben meldet.
+//         keys — gedrückte Tasten, siehe key_matrix.
+//         dma_* — dma_req = 1 mit Adresse und Daten halten, bis dma_ack = 1.
+//         pix_en = 1 für einen Takt pro Pixel; dazu vic_color (Farbnummer
+//         0..15) und vic_hblank/vic_vblank (1 in der Zeilen- bzw.
+//         Bildlücke). Das ist ein PAL-Raster: 504 Pixel, 312 Zeilen.
 
 `default_nettype none
 
@@ -43,8 +47,8 @@ module soc_c64 #(
     parameter BASIC_FILE        = "sw/asm/build/banktest_basic.hex",
     parameter CHAR_FILE         = "sw/asm/build/banktest_char.hex",
     parameter KERNAL_FILE       = "sw/asm/build/banktest_kernal.hex",
-    parameter CPU_DIV           = 50,
-    parameter UART_CLKS_PER_BIT = 434
+    parameter PIX_DIV           = 4,
+    parameter UART_CLKS_PER_BIT = 273
 ) (
     input  wire        clk,
     input  wire        rst,
@@ -54,52 +58,71 @@ module soc_c64 #(
     input  wire [15:0] dma_addr,
     input  wire [7:0]  dma_data,
     output wire        dma_ack,
-    input  wire        vid_en,
-    input  wire [15:0] vid_ram_addr,
-    output wire [7:0]  vid_ram_dout,
-    input  wire [9:0]  vid_color_addr,
-    output wire [3:0]  vid_color_dout,
-    input  wire [11:0] vid_char_addr,
-    output wire [7:0]  vid_char_dout,
-    output wire [3:0]  border_color,
-    output wire [3:0]  bg_color
+    output wire        pix_en,
+    output wire [3:0]  vic_color,
+    output wire        vic_hblank,
+    output wire        vic_vblank
 );
 
-    // --- Taktfreigabe für die CPU, oder ein Schritt für den Lader -----------
-    localparam DIV_W = (CPU_DIV > 1) ? $clog2(CPU_DIV) : 1;
+    // --- Phasen innerhalb eines CPU-Takts -----------------------------------
+    localparam SUB_W = (PIX_DIV > 1) ? $clog2(PIX_DIV) : 1;
 
-    reg [DIV_W-1:0] div_q;
-    reg             cpu_en_q;
-    reg             dma_wr_q;       // dieser Takt gehört dem Lader
+    reg [SUB_W-1:0] sub_q;      // Systemtakt innerhalb des Pixels
+    reg [2:0]       pix_q;      // Pixel innerhalb des CPU-Takts, 0..7
 
-    // Nach einem Schreiben ist erst wieder die CPU dran; so lange braucht
-    // der Lader ohnehin, um dma_req zurückzunehmen.
-    wire dma_take = dma_req && !dma_wr_q;
+    wire sub_last = (sub_q == PIX_DIV - 1);
+
+    always @(posedge clk) begin
+        if (rst) begin
+            sub_q <= {SUB_W{1'b0}};
+            pix_q <= 3'd0;
+        end else if (sub_last) begin
+            sub_q <= {SUB_W{1'b0}};
+            pix_q <= pix_q + 1'b1;
+        end else begin
+            sub_q <= sub_q + 1'b1;
+        end
+    end
+
+    // Freigaben für den VIC-II, so wie MiSTer sie erzeugt:
+    wire phi       = pix_q[2];                          // 0: VIC-II, 1: CPU
+    wire ena_pixel = sub_last;                          // letzter Takt jedes Pixels
+    wire ena_data  = sub_last && (pix_q[1:0] == 2'd3);  // Ende jeder Hälfte: Daten übernehmen
+    wire vic_read  = sub_last && (pix_q[1:0] == 2'd2);  // davor: Speicher für den VIC-II lesen
+    wire cpu_slot  = sub_last && (pix_q == 3'd3);       // danach beginnt die CPU-Hälfte
+
+    assign pix_en = ena_pixel;
+
+    // --- Wer bekommt den Schritt: CPU, Lader oder niemand -------------------
+    wire [15:0] addr;
+    wire [7:0]  cpu_dout;
+    wire        we;
+    reg  [7:0]  cpu_din;
+    wire        vic_ba;
+
+    reg cpu_en_q;       // dieser Takt ist ein Schritt der CPU
+    reg dma_wr_q;       // dieser Takt gehört dem Lader
+    reg tick_q;         // ein CPU-Takt ist vergangen (auch wenn die CPU steht)
 
     assign dma_ack = dma_wr_q;
 
     always @(posedge clk) begin
         if (rst) begin
-            div_q    <= {DIV_W{1'b0}};
             cpu_en_q <= 1'b0;
             dma_wr_q <= 1'b0;
-        end else if (div_q == CPU_DIV - 1) begin
-            div_q    <= {DIV_W{1'b0}};
-            cpu_en_q <= !dma_take;
-            dma_wr_q <= dma_take;
+            tick_q   <= 1'b0;
         end else begin
-            div_q    <= div_q + 1'b1;
-            cpu_en_q <= 1'b0;
-            dma_wr_q <= 1'b0;
+            // Die CPU darf, wenn der VIC-II den Bus nicht braucht (BA = 1)
+            // oder wenn ihr anstehender Zugriff ein Schreibzugriff ist.
+            cpu_en_q <= cpu_slot && !dma_req && (vic_ba || we);
+            dma_wr_q <= cpu_slot && dma_req;
+            tick_q   <= cpu_slot;
         end
     end
 
     // --- CPU ----------------------------------------------------------------
-    wire [15:0] addr;
-    wire [7:0]  cpu_dout;
-    wire        we;
-    reg  [7:0]  cpu_din;
-    wire        cia1_irq;
+    wire cia1_irq;
+    wire vic_irq_n;
 
     cpu_6502 u_cpu (
         .clk  (clk),
@@ -109,7 +132,7 @@ module soc_c64 #(
         .din  (cpu_din),
         .dout (cpu_dout),
         .we   (we),
-        .irq  (cia1_irq),
+        .irq  (cia1_irq | ~vic_irq_n),
         .nmi  (1'b0)
     );
 
@@ -137,10 +160,11 @@ module soc_c64 #(
         .sel_kernal (sel_kernal)
     );
 
-    wire sel_uart  = sel_io & (addr[11:8] == 4'hE);    // $DE00-$DEFF
     wire sel_vic   = sel_io & (addr[11:10] == 2'b00);  // $D000-$D3FF
     wire sel_color = sel_io & (addr[11:10] == 2'b10);  // $D800-$DBFF
     wire sel_cia1  = sel_io & (addr[11:8] == 4'hC);    // $DC00-$DCFF
+    wire sel_cia2  = sel_io & (addr[11:8] == 4'hD);    // $DD00-$DDFF
+    wire sel_uart  = sel_io & (addr[11:8] == 4'hE);    // $DE00-$DEFF
 
     // --- CPU-Port -----------------------------------------------------------
     wire [7:0] port_dout;
@@ -159,11 +183,19 @@ module soc_c64 #(
         .charen (charen)
     );
 
-    // --- Speicher -----------------------------------------------------------
+    // --- Speicher: Anschluss A für CPU und Lader, Anschluss B für den VIC-II -
+    wire [13:0] vic_addr;       // Adresse innerhalb des 16-KB-Viertels
+    wire [1:0]  vic_bank;       // gewähltes Viertel (aus CIA 2)
+    wire [15:0] vic_full_addr = {vic_bank, vic_addr};
+
     wire [7:0] ram_dout;
     wire [7:0] basic_dout;
     wire [7:0] char_dout;
     wire [7:0] kernal_dout;
+    wire [3:0] color_dout;
+    wire [7:0] vic_ram_dout;
+    wire [7:0] vic_char_dout;
+    wire [3:0] vic_color_dout;
 
     ram_dp_sync #(.ADDR_W(16)) u_ram (
         .clk      (clk),
@@ -172,9 +204,9 @@ module soc_c64 #(
         .a_addr   (dma_wr_q ? dma_addr : addr),
         .a_din    (dma_wr_q ? dma_data : cpu_dout),
         .a_dout_q (ram_dout),
-        .b_en     (vid_en),
-        .b_addr   (vid_ram_addr),
-        .b_dout_q (vid_ram_dout)
+        .b_en     (vic_read),
+        .b_addr   (vic_full_addr),
+        .b_dout_q (vic_ram_dout)
     );
 
     rom_sync #(.ADDR_W(13), .INIT_FILE(BASIC_FILE)) u_rom_basic (
@@ -189,9 +221,9 @@ module soc_c64 #(
         .a_en     (cpu_en_q),
         .a_addr   (addr[11:0]),
         .a_dout_q (char_dout),
-        .b_en     (vid_en),
-        .b_addr   (vid_char_addr),
-        .b_dout_q (vid_char_dout)
+        .b_en     (vic_read),
+        .b_addr   (vic_addr[11:0]),
+        .b_dout_q (vic_char_dout)
     );
 
     rom_sync #(.ADDR_W(13), .INIT_FILE(KERNAL_FILE)) u_rom_kernal (
@@ -201,23 +233,6 @@ module soc_c64 #(
         .dout_q (kernal_dout)
     );
 
-    // --- VIC-Register und Farb-RAM ------------------------------------------
-    wire [7:0] vic_dout;
-    wire [3:0] color_dout;
-
-    vic_stub u_vic_stub (
-        .clk            (clk),
-        .rst            (rst),
-        .en             (cpu_en_q),
-        .sel            (sel_vic),
-        .we             (we),
-        .addr           (addr[5:0]),
-        .din            (cpu_dout),
-        .dout_q         (vic_dout),
-        .border_color_q (border_color),
-        .bg_color_q     (bg_color)
-    );
-
     ram_dp_sync #(.ADDR_W(10), .DATA_W(4)) u_color_ram (
         .clk      (clk),
         .a_en     (cpu_en_q),
@@ -225,12 +240,89 @@ module soc_c64 #(
         .a_addr   (addr[9:0]),
         .a_din    (cpu_dout[3:0]),
         .a_dout_q (color_dout),
-        .b_en     (vid_en),
-        .b_addr   (vid_color_addr),
-        .b_dout_q (vid_color_dout)
+        .b_en     (vic_read),
+        .b_addr   (vic_addr[9:0]),
+        .b_dout_q (vic_color_dout)
     );
 
-    // --- CIA 1 --------------------------------------------------------------
+    // Der VIC-II sieht das Char-ROM bei $1000-$1FFF in den Vierteln 0 und 2.
+    reg vic_char_sel_q;
+
+    always @(posedge clk) begin
+        if (vic_read) vic_char_sel_q <= (vic_full_addr[14:12] == 3'b001);
+    end
+
+    wire [7:0] vic_di = vic_char_sel_q ? vic_char_dout : vic_ram_dout;
+
+    // --- VIC-II -------------------------------------------------------------
+    // Registerzugriff der CPU: Adresse und Daten des Schritts festhalten.
+    reg       vic_cs_q;
+    reg       vic_we_q;
+    reg [5:0] vic_reg_addr_q;
+    reg [7:0] vic_reg_din_q;
+
+    always @(posedge clk) begin
+        if (rst) begin
+            vic_cs_q <= 1'b0;
+            vic_we_q <= 1'b0;
+        end else if (cpu_en_q) begin
+            vic_cs_q       <= sel_vic;
+            vic_we_q       <= we;
+            vic_reg_addr_q <= addr[5:0];
+            vic_reg_din_q  <= cpu_dout;
+        end else if (cpu_slot) begin
+            vic_cs_q <= 1'b0;       // neuer CPU-Takt: alter Zugriff ist vorbei
+        end
+    end
+
+    wire [7:0] vic_do;
+    reg  [7:0] vic_dout_q;
+
+    always @(posedge clk) begin
+        if (ena_data && phi) vic_dout_q <= vic_do;     // Ende der CPU-Hälfte
+    end
+
+    video_vicii_656x #(
+        .registeredAddress (1),
+        .emulateRefresh    (1),
+        .emulateLightpen   (0),
+        .emulateGraphics   (1)
+    ) u_vic (
+        .clk         (clk),
+        .phi         (phi),
+        .enaData     (ena_data),
+        .enaPixel    (ena_pixel),
+        .baSync      (1'b0),
+        .ba          (vic_ba),
+        .ba_dma      (),
+        .mode6569    (1'b1),        // PAL: 63 Takte pro Zeile, 312 Zeilen
+        .mode6567old (1'b0),
+        .mode6567R8  (1'b0),
+        .mode6572    (1'b0),
+        .turbo_en    (1'b0),
+        .turbo_state (),
+        .variant     (2'b00),
+        .reset       (rst),
+        .cs          (vic_cs_q),
+        .we          (vic_we_q),
+        .lp_n        (1'b1),
+        .aRegisters  (vic_reg_addr_q),
+        .diRegisters (vic_reg_din_q),
+        .di          (vic_di),
+        .diColor     (vic_color_dout),
+        .do          (vic_do),
+        .vicAddr     (vic_addr),
+        .irq_n       (vic_irq_n),
+        .hSync       (vic_hblank),
+        .vSync       (vic_vblank),
+        .colorIndex  (vic_color),
+        .debugX      (),
+        .debugY      (),
+        .vicRefresh  (),
+        .addrValid   ()
+    );
+
+    // --- CIA 1: Tastatur und Timer-Interrupt --------------------------------
     wire [7:0] cia1_dout;
     wire [7:0] cia1_pa_out;
     wire [7:0] cia1_pb_out;
@@ -245,6 +337,7 @@ module soc_c64 #(
     cia u_cia1 (
         .clk    (clk),
         .rst    (rst),
+        .tick   (tick_q),
         .en     (cpu_en_q),
         .sel    (sel_cia1),
         .we     (we),
@@ -258,8 +351,34 @@ module soc_c64 #(
         .pb_in  (cia1_pb_in)
     );
 
-    // Port B wird nur gelesen; was die CIA dort ausgibt, braucht niemand.
-    wire unused_cia1 = &cia1_pb_out;
+    // --- CIA 2: Speicherbank des VIC-II -------------------------------------
+    // Ihr Interrupt ginge an den NMI der CPU; er wird noch nicht gebraucht.
+    wire [7:0] cia2_dout;
+    wire [7:0] cia2_pa_out;
+    wire [7:0] cia2_pb_out;
+    wire       cia2_irq;
+
+    cia u_cia2 (
+        .clk    (clk),
+        .rst    (rst),
+        .tick   (tick_q),
+        .en     (cpu_en_q),
+        .sel    (sel_cia2),
+        .we     (we),
+        .addr   (addr[3:0]),
+        .din    (cpu_dout),
+        .dout_q (cia2_dout),
+        .irq    (cia2_irq),
+        .pa_out (cia2_pa_out),
+        .pb_out (cia2_pb_out),
+        .pa_in  (8'hFF),
+        .pb_in  (8'hFF)
+    );
+
+    assign vic_bank = ~cia2_pa_out[1:0];
+
+    // Nicht benutzte Ausgänge der CIAs.
+    wire unused_cia = &{cia1_pb_out, cia2_pa_out[7:2], cia2_pb_out, cia2_irq};
 
     // --- UART-Register ------------------------------------------------------
     wire uart_ready;
@@ -274,9 +393,9 @@ module soc_c64 #(
     );
 
     // --- Lesedaten zur CPU --------------------------------------------------
-    // Die Speicher antworten einen Schritt später; deshalb wird gemerkt, wer
-    // im letzten Schritt angesprochen war. Wichtig beim Banking: Es zählt
-    // die Auswahl zum Zeitpunkt des Zugriffs, nicht die danach.
+    // Alle antworten einen Schritt später; deshalb wird gemerkt, wer im
+    // letzten Schritt angesprochen war. Wichtig beim Banking: Es zählt die
+    // Auswahl zum Zeitpunkt des Zugriffs, nicht die danach.
     reg sel_port_q;
     reg sel_ram_q;
     reg sel_basic_q;
@@ -286,6 +405,7 @@ module soc_c64 #(
     reg sel_vic_q;
     reg sel_color_q;
     reg sel_cia1_q;
+    reg sel_cia2_q;
     reg uart_ready_q;
 
     always @(posedge clk) begin
@@ -299,6 +419,7 @@ module soc_c64 #(
             sel_vic_q    <= sel_vic;
             sel_color_q  <= sel_color;
             sel_cia1_q   <= sel_cia1;
+            sel_cia2_q   <= sel_cia2;
             uart_ready_q <= uart_ready;
         end
     end
@@ -310,9 +431,10 @@ module soc_c64 #(
         else if (sel_char_q)   cpu_din = char_dout;
         else if (sel_kernal_q) cpu_din = kernal_dout;
         else if (sel_uart_q)   cpu_din = {uart_ready_q, 7'b0};
-        else if (sel_vic_q)    cpu_din = vic_dout;
+        else if (sel_vic_q)    cpu_din = vic_dout_q;
         else if (sel_color_q)  cpu_din = {4'hF, color_dout};
         else if (sel_cia1_q)   cpu_din = cia1_dout;
+        else if (sel_cia2_q)   cpu_din = cia2_dout;
         else                   cpu_din = 8'hFF;   // I/O-Fenster ohne Baustein
     end
 

@@ -7,9 +7,11 @@ Aufruf (aus dem Projektverzeichnis):
     python tb/screenshot.py --type "PRINT3+4"   nach dem Start Text + Enter tippen
     python tb/screenshot.py --load demo.prg --type RUN   erst Programm laden
 
-Lässt tb_c64_video laufen: Der Rechner arbeitet --wait Takte lang (ein Takt =
-ein CPU-Schritt), dann wird ein Bild aufgezeichnet. Das Original-KERNAL
-braucht für Speichertest und Startmeldung gut 2,5 Millionen Schritte.
+Lässt tb_c64_video laufen: Der Rechner arbeitet --wait CPU-Takte lang, dann
+wird ein Bild des VIC-II aufgezeichnet (504 x 312 Pixel, das ganze PAL-Raster
+einschließlich der Lücken). Das Original-KERNAL braucht für Speichertest und
+Startmeldung gut 2,5 Millionen CPU-Takte; die Simulation läuft über Questa
+und dauert dafür rund eine Viertelstunde.
 """
 import argparse
 import struct
@@ -26,6 +28,7 @@ import c64_term  # noqa: E402  (liefert die Ladeblöcke für eine .PRG-Datei)
 ROOT = run_sim.ROOT
 BUILD = run_sim.BUILD
 ROM_DIR = "sw/asm/build"
+CLKS_PER_CPU_CYCLE = 8  # tb_c64_video simuliert mit PIX_DIV = 1
 
 
 def ppm_to_png(ppm: Path, png: Path) -> None:
@@ -55,7 +58,7 @@ def ppm_to_png(ppm: Path, png: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--roms", choices=["c64", "test"], default="c64", help="ROM-Satz (Default: c64)")
-    parser.add_argument("--wait", type=int, help="Takte vor der Aufnahme")
+    parser.add_argument("--wait", type=int, help="CPU-Takte vor der Aufnahme")
     parser.add_argument("--load", type=Path, metavar="DATEI", help=".PRG-Datei, die nach der Wartezeit geladen wird")
     parser.add_argument("--type", dest="text", help="Text, der nach der Wartezeit getippt wird (ohne Leerzeichen)")
     parser.add_argument("-o", "--output", type=Path, default=BUILD / "screenshot.png")
@@ -71,9 +74,9 @@ def main() -> int:
         if missing:
             sys.exit(f"Original-ROMs fehlen ({', '.join(missing)}), siehe roms/README.md")
         plusargs = [f"+{key}={ROM_DIR}/{name}.hex" for key, name in files.items()]
-        plusargs += [f"+wait={args.wait or 3_000_000}", "+nocheck"]
+        plusargs += [f"+wait={(args.wait or 3_000_000) * CLKS_PER_CPU_CYCLE}", "+nocheck"]
     else:
-        plusargs = [f"+wait={args.wait or 100_000}"]
+        plusargs = [f"+wait={(args.wait or 100_000) * CLKS_PER_CPU_CYCLE}"]
 
     if args.load:
         blocks = c64_term.prg_to_blocks(args.load.read_bytes())

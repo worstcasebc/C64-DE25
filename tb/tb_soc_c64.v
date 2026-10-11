@@ -1,14 +1,16 @@
-// tb_soc_c64 — selbstprüfende Testbench für den Rechner mit C64-Speicherkarte.
+// tb_soc_c64 — selbstprüfende Testbench für den C64-Rechner.
+// Simulator: Questa
 //
 // Lässt die Test-ROMs (sw/asm/banktest.s) laufen und prüft, dass am UART-Pin
 // genau der erwartete Text erscheint. Das Programm schaltet das Banking um
 // und meldet je Bereich OK oder den falsch gelesenen Wert; zuletzt zählt es
 // Timer-Interrupts der CIA. Damit sind CPU, CPU-Port, Address-Decoder, RAM
-// unter den ROMs, alle drei ROMs und der IRQ-Weg gemeinsam getestet. Der Video-Anschluss bleibt hier unbenutzt (siehe tb_c64_video).
+// unter den ROMs, alle drei ROMs und der IRQ-Weg gemeinsam getestet — jetzt
+// mit dem echten VIC-II am Bus, der die CPU bei eingeschaltetem Bildschirm
+// regelmäßig anhält. Das Bild selbst prüft tb_c64_video.
 //
-// Zwei Instanzen laufen parallel: CPU_DIV = 1 (CPU in jedem Takt) und
-// CPU_DIV = 3 (Taktfreigabe jeden dritten Takt). Beide müssen denselben Text
-// liefern.
+// Der Rechner läuft mit PIX_DIV = 1 (8 statt 32 Systemtakte pro CPU-Takt),
+// das spart Rechenzeit.
 //
 // Während das Programm läuft, schreibt die Testbench über den DMA-Anschluss
 // 64 Bytes nach $C000 (dort arbeitet das Programm nicht). Geprüft wird, dass
@@ -33,132 +35,80 @@ module tb_soc_c64;
         "CIA-IRQ    OK\015\n"
     };
 
-    reg  clk = 1'b0;
-    reg  rst = 1'b1;
-    wire txd_div1;
-    wire txd_div3;
-    wire done_div1;
-    wire done_div3;
-    wire [31:0] errors_div1;
-    wire [31:0] errors_div3;
+    reg         clk = 1'b0;
+    reg         rst = 1'b1;
+    wire        txd;
+    wire        done;
+    wire [31:0] errors;
     reg         dma_req  = 1'b0;
     reg  [15:0] dma_addr = 16'h0000;
     reg  [7:0]  dma_data = 8'h00;
-    wire        dma_ack_div1;
-    wire        dma_ack_div3;
+    wire        dma_ack;
     integer     dma_errors = 0;
     integer     k;
 
-    soc_c64 #(.CPU_DIV(1), .UART_CLKS_PER_BIT(CLKS_PER_BIT)) dut_div1 (
-        .clk            (clk),
-        .rst            (rst),
-        .uart_txd       (txd_div1),
-        .keys           (64'd0),
-        .dma_req        (dma_req),
-        .dma_addr       (dma_addr),
-        .dma_data       (dma_data),
-        .dma_ack        (dma_ack_div1),
-        .vid_en         (1'b0),
-        .vid_ram_addr   (16'h0000),
-        .vid_ram_dout   (),
-        .vid_color_addr (10'h000),
-        .vid_color_dout (),
-        .vid_char_addr  (12'h000),
-        .vid_char_dout  (),
-        .border_color   (),
-        .bg_color       ()
+    soc_c64 #(.PIX_DIV(1), .UART_CLKS_PER_BIT(CLKS_PER_BIT)) dut (
+        .clk        (clk),
+        .rst        (rst),
+        .uart_txd   (txd),
+        .keys       (64'd0),
+        .dma_req    (dma_req),
+        .dma_addr   (dma_addr),
+        .dma_data   (dma_data),
+        .dma_ack    (dma_ack),
+        .pix_en     (),
+        .vic_color  (),
+        .vic_hblank (),
+        .vic_vblank ()
     );
 
-    soc_c64 #(.CPU_DIV(3), .UART_CLKS_PER_BIT(CLKS_PER_BIT)) dut_div3 (
-        .clk            (clk),
-        .rst            (rst),
-        .uart_txd       (txd_div3),
-        .keys           (64'd0),
-        .dma_req        (dma_req),
-        .dma_addr       (dma_addr),
-        .dma_data       (dma_data),
-        .dma_ack        (dma_ack_div3),
-        .vid_en         (1'b0),
-        .vid_ram_addr   (16'h0000),
-        .vid_ram_dout   (),
-        .vid_color_addr (10'h000),
-        .vid_color_dout (),
-        .vid_char_addr  (12'h000),
-        .vid_char_dout  (),
-        .border_color   (),
-        .bg_color       ()
+    uart_rx_check #(.BIT_NS(CLKS_PER_BIT * 20), .LEN(LEN), .EXPECTED(EXPECTED)) rx (
+        .rxd    (txd),
+        .done   (done),
+        .errors (errors)
     );
 
-    uart_rx_check #(.BIT_NS(CLKS_PER_BIT * 20), .LEN(LEN), .EXPECTED(EXPECTED)) rx_div1 (
-        .rxd    (txd_div1),
-        .done   (done_div1),
-        .errors (errors_div1)
-    );
+    always #10 clk = ~clk;
 
-    uart_rx_check #(.BIT_NS(CLKS_PER_BIT * 20), .LEN(LEN), .EXPECTED(EXPECTED)) rx_div3 (
-        .rxd    (txd_div3),
-        .done   (done_div3),
-        .errors (errors_div3)
-    );
-
-    always #10 clk = ~clk;   // 50 MHz
-
-    initial begin
-        $dumpfile("tb/build/tb_soc_c64.vcd");
-        $dumpvars(0, tb_soc_c64);
-    end
-
-    // DMA: Beide Instanzen bekommen denselben Schreibwunsch. Er bleibt
-    // stehen, bis beide bestätigt haben (die schnellere schreibt dann
-    // denselben Wert mehrmals — das schadet nicht).
-    reg seen_div1;
-    reg seen_div3;
-
+    // DMA: Schreibwunsch anlegen und halten, bis er bestätigt ist.
     initial begin
         wait (!rst);
-        repeat (500) @(posedge clk);
+        repeat (2000) @(posedge clk);
         for (k = 0; k < 64; k = k + 1) begin
             @(negedge clk);
             dma_addr = 16'hC000 + k[15:0];
             dma_data = 8'h80 + k[7:0];
             dma_req  = 1'b1;
-            seen_div1 = 1'b0;
-            seen_div3 = 1'b0;
-            while (!(seen_div1 && seen_div3)) begin
-                @(posedge clk);
-                if (dma_ack_div1) seen_div1 = 1'b1;
-                if (dma_ack_div3) seen_div3 = 1'b1;
-            end
+            @(posedge clk);
+            while (!dma_ack) @(posedge clk);
             @(negedge clk);
             dma_req = 1'b0;
-            repeat (37) @(posedge clk);
+            repeat (137) @(posedge clk);
         end
     end
 
     initial begin
-        repeat (5) @(posedge clk);
+        repeat (20) @(posedge clk);
         @(negedge clk) rst = 1'b0;
 
-        wait (done_div1 && done_div3);
+        wait (done);
 
         for (k = 0; k < 64; k = k + 1) begin
-            if (dut_div1.u_ram.mem[16'hC000 + k] !== 8'h80 + k[7:0] ||
-                dut_div3.u_ram.mem[16'hC000 + k] !== 8'h80 + k[7:0]) begin
-                $display("FAIL: DMA-Byte %0d: div1=%h div3=%h, erwartet %h", k,
-                         dut_div1.u_ram.mem[16'hC000 + k], dut_div3.u_ram.mem[16'hC000 + k],
-                         8'h80 + k[7:0]);
+            if (dut.u_ram.mem[16'hC000 + k] !== 8'h80 + k[7:0]) begin
+                $display("FAIL: DMA-Byte %0d ist %h, erwartet %h", k,
+                         dut.u_ram.mem[16'hC000 + k], 8'h80 + k[7:0]);
                 dma_errors = dma_errors + 1;
             end
         end
 
-        if (errors_div1 + errors_div3 + dma_errors == 0) $display("PASS: tb_soc_c64");
-        else $display("FAIL: tb_soc_c64 (%0d Fehler)", errors_div1 + errors_div3 + dma_errors);
+        if (errors + dma_errors == 0) $display("PASS: tb_soc_c64");
+        else $display("FAIL: tb_soc_c64 (%0d Fehler)", errors + dma_errors);
         $finish;
     end
 
     initial begin
-        #10_000_000;
-        $display("FAIL: tb_soc_c64 Timeout (div1 fertig=%b, div3 fertig=%b)", done_div1, done_div3);
+        #400_000_000;
+        $display("FAIL: tb_soc_c64 Timeout (fertig=%b)", done);
         $finish;
     end
 
