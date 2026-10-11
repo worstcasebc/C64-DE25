@@ -7,14 +7,15 @@
 //           LEDR[3]   HDMI-Sender bestätigt den letzten I2C-Zugriff nicht,
 //                     oder die Warteschlange der Tastatur ist voll
 //           LEDR[4]   HDMI-Sender fertig konfiguriert
-//           LEDR[5]   KEY1 gedrückt oder es wird gerade getippt
+//           LEDR[5]   KEY1 gedrückt, es wird getippt oder geladen
 //           LEDR[6]   2-Hz-Herzschlag aus clk_100 (PLL) — blinkt nur, wenn
 //                     die PLL eingerastet ist
 //           LEDR[7]   Reset aktiv (KEY0 gedrückt)
 //           FPGA_UART_TX  Textausgabe des 6502-Programms, 115200 Baud 8N1,
 //                     über den FTDI-Chip am Type-C-Anschluss
 //           FPGA_UART_RX  Tastatur-Ersatz: Zeichen aus dem Terminal werden
-//                     auf der C64-Tastatur getippt (ascii_key_typer)
+//                     auf der C64-Tastatur getippt (ascii_key_typer);
+//                     Ladeblöcke gehen direkt ins RAM (prg_loader)
 //           HDMI      C64-Textbildschirm (video_text) in 640x480 über den
 //                     HDMI-Sender ADV7513
 // Takte:  clk_50  = CLOCK0_50 (50 MHz, Boardoszillator)
@@ -116,8 +117,9 @@ module de25_nano_top #(
 
     wire pix_en = pix_clk_q;
 
-    // Tastatur-Ersatz: Zeichen vom PC (115200 Baud) warten in einer
-    // Schlange für 4096 Zeichen und werden nacheinander getippt.
+    // Vom PC (115200 Baud) kommen Tastendrücke und Ladeblöcke. prg_loader
+    // trennt sie: Tastendrücke warten in einer Schlange für 4096 Zeichen und
+    // werden nacheinander getippt, Ladedaten gehen direkt ins RAM.
     wire [7:0]  rx_data_q;
     wire        rx_valid_q;
     wire        key_fifo_empty;
@@ -126,6 +128,13 @@ module de25_nano_top #(
     wire        key_fifo_rd;
     wire [63:0] keys;
     wire        typer_busy;
+    wire [7:0]  key_data;
+    wire        key_valid;
+    wire        dma_req;
+    wire [15:0] dma_addr;
+    wire [7:0]  dma_data;
+    wire        dma_ack;
+    wire        loader_active;
 
     uart_rx #(.CLKS_PER_BIT(434)) u_uart_rx (
         .clk     (clk_50),
@@ -135,11 +144,25 @@ module de25_nano_top #(
         .valid_q (rx_valid_q)
     );
 
+    prg_loader u_prg_loader (
+        .clk       (clk_50),
+        .rst       (rst),
+        .rx_data   (rx_data_q),
+        .rx_valid  (rx_valid_q),
+        .key_data  (key_data),
+        .key_valid (key_valid),
+        .dma_req   (dma_req),
+        .dma_addr  (dma_addr),
+        .dma_data  (dma_data),
+        .dma_ack   (dma_ack),
+        .active    (loader_active)
+    );
+
     fifo_sync #(.ADDR_W(12)) u_key_fifo (
         .clk    (clk_50),
         .rst    (rst),
-        .wr_en  (rx_valid_q),
-        .din    (rx_data_q),
+        .wr_en  (key_valid),
+        .din    (key_data),
         .full   (key_fifo_full),
         .rd_en  (key_fifo_rd),
         .dout_q (key_fifo_data),
@@ -178,6 +201,10 @@ module de25_nano_top #(
         .rst            (rst),
         .uart_txd       (FPGA_UART_TX),
         .keys           (keys),
+        .dma_req        (dma_req),
+        .dma_addr       (dma_addr),
+        .dma_data       (dma_data),
+        .dma_ack        (dma_ack),
         .vid_en         (pix_en),
         .vid_ram_addr   (vid_ram_addr),
         .vid_ram_dout   (vid_ram_dout),
@@ -326,7 +353,7 @@ module de25_nano_top #(
     // --- LEDs ---------------------------------------------------------------
     // Interne Sicht: 1 = LED an. LEDs dürfen direkt aus beiden Domänen kommen,
     // weil sie nur das Auge erreichen und keine weitere Logik.
-    wire [7:0] led = {rst, heartbeat_100_q, key_q[1] | typer_busy, hdmi_ready_q, hdmi_nack_q | key_fifo_full,
+    wire [7:0] led = {rst, heartbeat_100_q, key_q[1] | typer_busy | loader_active, hdmi_ready_q, hdmi_nack_q | key_fifo_full,
                       sw_q[1:0], heartbeat_50_q};
 
     assign LEDR = ~led;

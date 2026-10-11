@@ -15,6 +15,9 @@
 // ROMs nutzen (siehe tb/screenshot.py):
 //   +basic=<hex> +char=<hex> +kernal=<hex>   ROM-Inhalte ersetzen
 //   +wait=<Takte>                            Wartezeit vor der Aufnahme
+//   +load=<hex> +loadlen=<n>                 danach n Bytes aus der Datei so
+//                                            einspielen, als kämen sie vom
+//                                            UART (Ladeblöcke für prg_loader)
 //   +type=<Text>                             danach Text und Enter auf
 //                                            einmal in die Warteschlange
 //                                            legen und tippen lassen, dann
@@ -62,6 +65,13 @@ module tb_c64_video;
     wire        fifo_full;
     wire [7:0]  fifo_data;
     wire        fifo_rd;
+    wire [7:0]  key_data;
+    wire        key_valid;
+    wire        dma_req;
+    wire [15:0] dma_addr;
+    wire [7:0]  dma_data;
+    wire        dma_ack;
+    wire        loader_active;
     reg  [7:0]  type_data  = 8'h00;
     reg         type_valid = 1'b0;
 
@@ -72,6 +82,10 @@ module tb_c64_video;
         .rst            (rst),
         .uart_txd       (uart_txd),
         .keys           (keys),
+        .dma_req        (dma_req),
+        .dma_addr       (dma_addr),
+        .dma_data       (dma_data),
+        .dma_ack        (dma_ack),
         .vid_en         (pix_en),
         .vid_ram_addr   (vid_ram_addr),
         .vid_ram_dout   (vid_ram_dout),
@@ -85,11 +99,26 @@ module tb_c64_video;
 
     // Tastendauer passend zur Simulation: Die CPU läuft hier in jedem Takt,
     // das KERNAL fragt die Tastatur also etwa alle 17000 Takte ab.
+    // type_data/type_valid spielen den UART-Empfänger.
+    prg_loader #(.TIMEOUT_CLKS(1_000_000)) u_loader (
+        .clk       (clk),
+        .rst       (rst),
+        .rx_data   (type_data),
+        .rx_valid  (type_valid),
+        .key_data  (key_data),
+        .key_valid (key_valid),
+        .dma_req   (dma_req),
+        .dma_addr  (dma_addr),
+        .dma_data  (dma_data),
+        .dma_ack   (dma_ack),
+        .active    (loader_active)
+    );
+
     fifo_sync #(.ADDR_W(8)) u_key_fifo (
         .clk    (clk),
         .rst    (rst),
-        .wr_en  (type_valid),
-        .din    (type_data),
+        .wr_en  (key_valid),
+        .din    (key_data),
         .full   (fifo_full),
         .rd_en  (fifo_rd),
         .dout_q (fifo_data),
@@ -207,14 +236,18 @@ module tb_c64_video;
     integer         after_clks;
     integer         code, line, pos, n;
 
-    task type_char(input [7:0] ch);     // ein Zeichen in die Warteschlange
+    task type_char(input [7:0] ch);     // ein Byte "vom UART", danach kurze Pause
         begin
             @(negedge clk);
             type_data = ch; type_valid = 1'b1;
             @(negedge clk);
             type_valid = 1'b0;
+            repeat (6) @(negedge clk);
         end
     endtask
+
+    reg [7:0] load_bytes [0:65535];
+    integer   load_len;
 
     initial begin
         if (!$value$plusargs("wait=%d", wait_clks)) wait_clks = 100_000;
@@ -230,6 +263,13 @@ module tb_c64_video;
 
         // Programm laufen lassen
         repeat (wait_clks) @(posedge clk);
+
+        // Auf Wunsch Ladeblöcke einspielen
+        if ($value$plusargs("load=%s", rom_file)) begin
+            if (!$value$plusargs("loadlen=%d", load_len)) load_len = 0;
+            $readmemh(rom_file, load_bytes);
+            for (n = 0; n < load_len; n = n + 1) type_char(load_bytes[n]);
+        end
 
         // Auf Wunsch tippen: Text steht rechtsbündig in type_text, davor Nullen
         if ($value$plusargs("type=%s", type_text)) begin

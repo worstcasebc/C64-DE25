@@ -9,6 +9,11 @@
 // Zwei Instanzen laufen parallel: CPU_DIV = 1 (CPU in jedem Takt) und
 // CPU_DIV = 3 (Taktfreigabe jeden dritten Takt). Beide müssen denselben Text
 // liefern.
+//
+// Während das Programm läuft, schreibt die Testbench über den DMA-Anschluss
+// 64 Bytes nach $C000 (dort arbeitet das Programm nicht). Geprüft wird, dass
+// sie im RAM ankommen und die CPU trotz der ausgesetzten Schritte denselben
+// Text ausgibt.
 
 `timescale 1ns / 1ps
 `default_nettype none
@@ -36,12 +41,23 @@ module tb_soc_c64;
     wire done_div3;
     wire [31:0] errors_div1;
     wire [31:0] errors_div3;
+    reg         dma_req  = 1'b0;
+    reg  [15:0] dma_addr = 16'h0000;
+    reg  [7:0]  dma_data = 8'h00;
+    wire        dma_ack_div1;
+    wire        dma_ack_div3;
+    integer     dma_errors = 0;
+    integer     k;
 
     soc_c64 #(.CPU_DIV(1), .UART_CLKS_PER_BIT(CLKS_PER_BIT)) dut_div1 (
         .clk            (clk),
         .rst            (rst),
         .uart_txd       (txd_div1),
         .keys           (64'd0),
+        .dma_req        (dma_req),
+        .dma_addr       (dma_addr),
+        .dma_data       (dma_data),
+        .dma_ack        (dma_ack_div1),
         .vid_en         (1'b0),
         .vid_ram_addr   (16'h0000),
         .vid_ram_dout   (),
@@ -58,6 +74,10 @@ module tb_soc_c64;
         .rst            (rst),
         .uart_txd       (txd_div3),
         .keys           (64'd0),
+        .dma_req        (dma_req),
+        .dma_addr       (dma_addr),
+        .dma_data       (dma_data),
+        .dma_ack        (dma_ack_div3),
         .vid_en         (1'b0),
         .vid_ram_addr   (16'h0000),
         .vid_ram_dout   (),
@@ -88,14 +108,51 @@ module tb_soc_c64;
         $dumpvars(0, tb_soc_c64);
     end
 
+    // DMA: Beide Instanzen bekommen denselben Schreibwunsch. Er bleibt
+    // stehen, bis beide bestätigt haben (die schnellere schreibt dann
+    // denselben Wert mehrmals — das schadet nicht).
+    reg seen_div1;
+    reg seen_div3;
+
+    initial begin
+        wait (!rst);
+        repeat (500) @(posedge clk);
+        for (k = 0; k < 64; k = k + 1) begin
+            @(negedge clk);
+            dma_addr = 16'hC000 + k[15:0];
+            dma_data = 8'h80 + k[7:0];
+            dma_req  = 1'b1;
+            seen_div1 = 1'b0;
+            seen_div3 = 1'b0;
+            while (!(seen_div1 && seen_div3)) begin
+                @(posedge clk);
+                if (dma_ack_div1) seen_div1 = 1'b1;
+                if (dma_ack_div3) seen_div3 = 1'b1;
+            end
+            @(negedge clk);
+            dma_req = 1'b0;
+            repeat (37) @(posedge clk);
+        end
+    end
+
     initial begin
         repeat (5) @(posedge clk);
         @(negedge clk) rst = 1'b0;
 
         wait (done_div1 && done_div3);
 
-        if (errors_div1 + errors_div3 == 0) $display("PASS: tb_soc_c64");
-        else $display("FAIL: tb_soc_c64 (%0d Fehler)", errors_div1 + errors_div3);
+        for (k = 0; k < 64; k = k + 1) begin
+            if (dut_div1.u_ram.mem[16'hC000 + k] !== 8'h80 + k[7:0] ||
+                dut_div3.u_ram.mem[16'hC000 + k] !== 8'h80 + k[7:0]) begin
+                $display("FAIL: DMA-Byte %0d: div1=%h div3=%h, erwartet %h", k,
+                         dut_div1.u_ram.mem[16'hC000 + k], dut_div3.u_ram.mem[16'hC000 + k],
+                         8'h80 + k[7:0]);
+                dma_errors = dma_errors + 1;
+            end
+        end
+
+        if (errors_div1 + errors_div3 + dma_errors == 0) $display("PASS: tb_soc_c64");
+        else $display("FAIL: tb_soc_c64 (%0d Fehler)", errors_div1 + errors_div3 + dma_errors);
         $finish;
     end
 

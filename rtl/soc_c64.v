@@ -11,6 +11,11 @@
 // Takt:   clk (eine Domäne), synchroner Reset rst (aktiv high). Die CPU und
 //         alles am Bus arbeiten nur in Takten mit cpu_en_q = 1, also jeden
 //         CPU_DIV-ten Takt (Default 50 MHz / 50 = 1 MHz).
+// DMA:    Ein Lader (prg_loader) kann Bytes direkt ins RAM schreiben. Dafür
+//         bekommt statt der CPU einmal er den nächsten Schritt: Die CPU
+//         setzt einen Schritt aus und merkt davon nichts, weil ihre
+//         Lesedaten stehen bleiben. Geschrieben wird immer ins RAM, auch
+//         unter ROM und I/O.
 // Bus:    Speicherkarte siehe c64_addr_decode, Banking siehe cpu_port.
 //         Das RAM liegt unter allem: Schreiben geht immer ins RAM, außer bei
 //         CPU-Port und sichtbarem I/O.
@@ -29,6 +34,8 @@
 //         border_color/bg_color — Farbnummern aus $D020/$D021.
 //         keys — gedrückte Tasten, synchron zu clk; Nummerierung siehe
 //         key_matrix.
+//         dma_* — dma_req = 1 mit Adresse und Daten anlegen und halten, bis
+//         dma_ack = 1 (ein Takt) das Schreiben meldet.
 
 `default_nettype none
 
@@ -43,6 +50,10 @@ module soc_c64 #(
     input  wire        rst,
     output wire        uart_txd,
     input  wire [63:0] keys,
+    input  wire        dma_req,
+    input  wire [15:0] dma_addr,
+    input  wire [7:0]  dma_data,
+    output wire        dma_ack,
     input  wire        vid_en,
     input  wire [15:0] vid_ram_addr,
     output wire [7:0]  vid_ram_dout,
@@ -54,22 +65,32 @@ module soc_c64 #(
     output wire [3:0]  bg_color
 );
 
-    // --- Taktfreigabe für die CPU -------------------------------------------
+    // --- Taktfreigabe für die CPU, oder ein Schritt für den Lader -----------
     localparam DIV_W = (CPU_DIV > 1) ? $clog2(CPU_DIV) : 1;
 
     reg [DIV_W-1:0] div_q;
     reg             cpu_en_q;
+    reg             dma_wr_q;       // dieser Takt gehört dem Lader
+
+    // Nach einem Schreiben ist erst wieder die CPU dran; so lange braucht
+    // der Lader ohnehin, um dma_req zurückzunehmen.
+    wire dma_take = dma_req && !dma_wr_q;
+
+    assign dma_ack = dma_wr_q;
 
     always @(posedge clk) begin
         if (rst) begin
             div_q    <= {DIV_W{1'b0}};
             cpu_en_q <= 1'b0;
+            dma_wr_q <= 1'b0;
         end else if (div_q == CPU_DIV - 1) begin
             div_q    <= {DIV_W{1'b0}};
-            cpu_en_q <= 1'b1;
+            cpu_en_q <= !dma_take;
+            dma_wr_q <= dma_take;
         end else begin
             div_q    <= div_q + 1'b1;
             cpu_en_q <= 1'b0;
+            dma_wr_q <= 1'b0;
         end
     end
 
@@ -147,9 +168,9 @@ module soc_c64 #(
     ram_dp_sync #(.ADDR_W(16)) u_ram (
         .clk      (clk),
         .a_en     (cpu_en_q),
-        .a_we     (we & ~sel_port & ~sel_io),
-        .a_addr   (addr),
-        .a_din    (cpu_dout),
+        .a_we     (dma_wr_q | (cpu_en_q & we & ~sel_port & ~sel_io)),
+        .a_addr   (dma_wr_q ? dma_addr : addr),
+        .a_din    (dma_wr_q ? dma_data : cpu_dout),
         .a_dout_q (ram_dout),
         .b_en     (vid_en),
         .b_addr   (vid_ram_addr),
@@ -200,7 +221,7 @@ module soc_c64 #(
     ram_dp_sync #(.ADDR_W(10), .DATA_W(4)) u_color_ram (
         .clk      (clk),
         .a_en     (cpu_en_q),
-        .a_we     (we & sel_color),
+        .a_we     (cpu_en_q & we & sel_color),
         .a_addr   (addr[9:0]),
         .a_din    (cpu_dout[3:0]),
         .a_dout_q (color_dout),
