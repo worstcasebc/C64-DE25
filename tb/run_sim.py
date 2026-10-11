@@ -9,8 +9,8 @@ Jede Testbench muss am Ende "PASS: <name>" ausgeben; jede Zeile mit "FAIL"
 gilt als Fehler. Wellenformen landen in tb/build/<name>.vcd.
 
 Normalerweise läuft Icarus. Icarus kann aber kein VHDL und liest hier kein
-SystemVerilog; Testbenches, die den VIC-II aus FPGA64 (rtl/**/*.vhd) oder
-den SID aus MiSTer (rtl/**/*.sv) brauchen, tragen deshalb die Zeile
+SystemVerilog; Testbenches, die CPU oder VIC-II (rtl/**/*.vhd) oder den SID
+aus MiSTer (rtl/**/*.sv) brauchen, tragen deshalb die Zeile
 "// Simulator: Questa" und laufen über Questa (im Quartus-Paket enthalten),
 das alle drei Sprachen gemeinsam simuliert.
 """
@@ -53,9 +53,26 @@ def run_tb_questa(name: str, rtl: list[str], helpers: list[str], plusargs: tuple
     rel = work.relative_to(ROOT).as_posix()
     lib = f"{rel}/work"
 
+    subprocess.run([tool["vlib"], lib], cwd=ROOT, capture_output=True, text=True)
+
+    # VHDL-Dateien bauen aufeinander auf (z. B. T65.vhd auf T65_Pack.vhd) und
+    # müssen in der passenden Reihenfolge übersetzt werden. Statt die
+    # Reihenfolge zu pflegen: so lange wiederholen, wie es Fortschritt gibt.
+    pending, messages = vhdl, ""
+    while pending:
+        failed = []
+        for f in pending:
+            step = subprocess.run([tool["vcom"], "-2008", "-quiet", "-work", lib, f],
+                                  cwd=ROOT, capture_output=True, text=True)
+            if step.returncode != 0:
+                failed.append(f)
+                messages = step.stdout + step.stderr
+        if len(failed) == len(pending):
+            print(messages)
+            return False
+        pending = failed
+
     steps = [
-        [tool["vlib"], lib],
-        [tool["vcom"], "-2008", "-quiet", "-work", lib, *vhdl],
         [tool["vlog"], "-sv", "-quiet", "-work", lib, *sysv],
         [tool["vlog"], "-quiet", "-work", lib, f"tb/{name}.v", *helpers, *rtl],
     ]

@@ -61,6 +61,7 @@ def main() -> int:
     parser.add_argument("--wait", type=int, help="CPU-Takte vor der Aufnahme")
     parser.add_argument("--load", type=Path, metavar="DATEI", help=".PRG-Datei, die nach der Wartezeit geladen wird")
     parser.add_argument("--type", dest="text", help="Text, der nach der Wartezeit getippt wird (ohne Leerzeichen)")
+    parser.add_argument("--after", type=int, help="CPU-Takte zwischen Tippen und Aufnahme")
     parser.add_argument("-o", "--output", type=Path, default=BUILD / "screenshot.png")
     args = parser.parse_args()
 
@@ -84,6 +85,8 @@ def main() -> int:
         plusargs += ["+load=tb/build/load_bytes.hex", f"+loadlen={len(blocks)}"]
     if args.text:
         plusargs.append(f"+type={args.text}")
+    if args.after:
+        plusargs.append(f"+after={args.after * CLKS_PER_CPU_CYCLE}")
 
     if not run_sim.run_tb("tb_c64_video", tuple(plusargs)):
         return 1
