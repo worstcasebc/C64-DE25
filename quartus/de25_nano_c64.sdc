@@ -22,6 +22,20 @@ set_output_delay -clock clk_50 0 [get_ports {LEDR[*]}]
 set_false_path   -to [get_ports FPGA_UART_TX]
 set_output_delay -clock clk_50 0 [get_ports FPGA_UART_TX]
 
+# HDMI-Video: Daten und Takt kommen aus derselben Domäne. Die Daten wechseln
+# mit der fallenden Flanke von HDMI_TX_CLK, der Sender übernimmt sie mit der
+# steigenden — also 20 ns nach dem Wechsel und 20 ns vor dem nächsten. Gegen
+# diese Reserve sind die Laufzeitunterschiede zwischen den Pins (wenige ns)
+# klein; deshalb hier keine genaue Prüfung.
+set_false_path   -to [get_ports {HDMI_TX_CLK HDMI_TX_D[*] HDMI_TX_DE HDMI_TX_HS HDMI_TX_VS}]
+set_output_delay -clock clk_50 0 [get_ports {HDMI_TX_CLK HDMI_TX_D[*] HDMI_TX_DE HDMI_TX_HS HDMI_TX_VS}]
+
+# I2C zum HDMI-Sender: 100 kHz, ein Viertel-Bit dauert 125 Takte. Die
+# Eingänge sind asynchron und laufen über sync_2ff.
+set_false_path   -to   [get_ports {HDMI_I2C_SCL HDMI_I2C_SDA}]
+set_false_path   -from [get_ports {HDMI_I2C_SDA HDMI_TX_INT}]
+set_output_delay -clock clk_50 0 [get_ports {HDMI_I2C_SCL HDMI_I2C_SDA}]
+
 # JTAG-Takt: existiert nur, wenn Signal Tap (oder anderes JTAG-Debug) im
 # Design steckt. Er kommt vom USB-Blaster und hat keinen Bezug zu clk_50,
 # deshalb als eigene, asynchrone Taktgruppe.
