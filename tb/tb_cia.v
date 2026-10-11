@@ -11,6 +11,14 @@
 // tick und en sind hier dasselbe Signal: Die CPU ist nie angehalten.
 // 7. Ports: Ausgänge liefern das Register, Eingänge den Pegel am Pin.
 // 8. Schreiben ohne sel wird ignoriert.
+// 9. Timer B: zählt wie Timer A CPU-Takte und meldet sich in ICR Bit 1.
+// 10. Timer B zählt Unterläufe von Timer A (CRB Bit 6): So entsteht ein
+//     langer Zähler aus beiden.
+// 11. Uhr: zählt Zehntel aus dem 50-Hz-Takt, mit Überträgen bis in die
+//     Stunden (11:59:59,9 vormittags -> 12:00:00,0 nachmittags).
+// 12. Uhr anhalten beim Stellen, einfrieren beim Ablesen.
+// 13. Wecker: Meldung in ICR Bit 2, wenn Uhr und Weckzeit gleich werden.
+// 14. Eingang FLAG: fallende Flanke setzt ICR Bit 4.
 
 `timescale 1ns / 1ps
 `default_nettype none
@@ -26,6 +34,8 @@ module tb_cia;
     reg  [7:0] din   = 8'h00;
     reg  [7:0] pa_in = 8'hFF;
     reg  [7:0] pb_in = 8'hFF;
+    reg        tod_tick = 1'b0;
+    reg        flag_n   = 1'b1;
     wire [7:0] dout;
     wire       irq;
     wire [7:0] pa_out;
@@ -39,8 +49,9 @@ module tb_cia;
 
     cia dut (
         .clk    (clk),
-        .rst    (rst),
-        .tick   (en),
+        .rst      (rst),
+        .tick     (en),
+        .tod_tick (tod_tick),
         .en     (en),
         .sel    (sel),
         .we     (we),
@@ -51,7 +62,8 @@ module tb_cia;
         .pa_out (pa_out),
         .pb_out (pb_out),
         .pa_in  (pa_in),
-        .pb_in  (pb_in)
+        .pb_in  (pb_in),
+        .flag_n (flag_n)
     );
 
     always #10 clk = ~clk;
@@ -80,6 +92,39 @@ module tb_cia;
         begin
             repeat (n) @(posedge clk);
             #1;
+        end
+    endtask
+
+    // n Takte der Netzfrequenz für die Uhr, jeweils einen Takt lang
+    task tod_ticks(input integer n);
+        integer k;
+        begin
+            for (k = 0; k < n; k = k + 1) begin
+                @(negedge clk) tod_tick = 1'b1;
+                @(negedge clk) tod_tick = 1'b0;
+            end
+        end
+    endtask
+
+    // Liest die Uhr in der richtigen Reihenfolge (Stunden zuerst, Zehntel
+    // zuletzt) und liefert sie als {Stunden, Minuten, Sekunden, Zehntel}.
+    reg [31:0] tod_value;
+
+    task read_tod;
+        begin
+            bus_read(4'hB); tod_value[31:24] = dout;
+            bus_read(4'hA); tod_value[23:16] = dout;
+            bus_read(4'h9); tod_value[15:8]  = dout;
+            bus_read(4'h8); tod_value[7:0]   = dout;
+        end
+    endtask
+
+    task set_tod(input [7:0] hour, input [7:0] min, input [7:0] sec, input [7:0] tenth);
+        begin
+            bus_write(4'hB, hour);
+            bus_write(4'hA, min);
+            bus_write(4'h9, sec);
+            bus_write(4'h8, tenth);
         end
     endtask
 
@@ -191,13 +236,112 @@ module tb_cia;
         we = 1'b0;
         bus_read(4'h2);  expect_eq(dout, 8'h0F, "DDRA nach Schreiben ohne sel");
 
+        // 9. Timer B allein: Startwert 2, fortlaufend
+        bus_write(4'hE, 8'h00);         // Timer A aus
+        bus_write(4'hD, 8'h7F);         // alle Interrupts sperren
+        bus_read(4'hD);                 // alte Meldungen löschen
+        bus_write(4'h6, 8'h02);
+        bus_write(4'h7, 8'h00);
+        bus_write(4'hD, 8'h82);         // Unterlauf Timer B freigeben
+        bus_write(4'hF, 8'h11);         // Start + Startwert laden
+        wait (irq);
+        #1 first_irq = irq_edge;
+        idle(1);
+        bus_read(4'hD);
+        expect_eq(dout, 8'h82, "ICR beim Unterlauf von Timer B");
+        wait (irq);
+        #1 expect_eq(irq_edge - first_irq, 3, "Schritte zwischen Unterlaeufen B");
+        bus_write(4'hF, 8'h00);
+        bus_read(4'hD);
+
+        // 10. Timer B zählt Unterläufe von Timer A: A läuft alle 4 Schritte
+        //     ab (Startwert 3), B braucht 3 davon (Startwert 2) -> alle 12.
+        bus_write(4'h4, 8'h03);
+        bus_write(4'h5, 8'h00);
+        bus_write(4'h6, 8'h02);
+        bus_write(4'h7, 8'h00);
+        bus_write(4'hF, 8'h51);         // Start + laden + Quelle Timer A
+        bus_write(4'hE, 8'h11);
+        wait (irq);
+        #1 first_irq = irq_edge;
+        idle(1);
+        bus_read(4'hD);
+        expect_eq(dout & 8'h82, 8'h82, "ICR bei gekoppelten Timern");
+        wait (irq);
+        #1 expect_eq(irq_edge - first_irq, 12, "Schritte bei gekoppelten Timern");
+        bus_write(4'hE, 8'h00);
+        bus_write(4'hF, 8'h00);
+        bus_write(4'hD, 8'h7F);
+        bus_read(4'hD);
+
+        // 11. Uhr mit 50 Hz (CRA Bit 7): 5 Takte = eine Zehntelsekunde
+        bus_write(4'hE, 8'h80);
+        set_tod(8'h11, 8'h59, 8'h59, 8'h08);            // 11:59:59,8 vormittags
+        tod_ticks(4);
+        read_tod;
+        expect_eq(tod_value, 32'h11595908, "Uhr nach 4 Takten");
+        tod_ticks(1);
+        read_tod;
+        expect_eq(tod_value, 32'h11595909, "Uhr nach 5 Takten");
+        tod_ticks(5);
+        read_tod;
+        expect_eq(tod_value, 32'h92000000, "Uhr nach Uebertrag: 12:00:00,0 nachmittags");
+        set_tod(8'h92, 8'h59, 8'h59, 8'h09);            // 12:59:59,9 nachmittags
+        tod_ticks(5);
+        read_tod;
+        expect_eq(tod_value, 32'h81000000, "Uhr: nach 12 kommt 1");
+        set_tod(8'h09, 8'h09, 8'h29, 8'h09);
+        tod_ticks(5);
+        read_tod;
+        expect_eq(tod_value, 32'h09093000, "Uhr: BCD-Uebertrag in den Sekunden");
+
+        // 12. Anhalten beim Stellen, Einfrieren beim Ablesen
+        bus_write(4'hB, 8'h03);                         // Stunden: Uhr hält an
+        tod_ticks(20);
+        bus_write(4'hA, 8'h15);
+        bus_write(4'h9, 8'h30);
+        bus_write(4'h8, 8'h00);                         // Zehntel: Uhr läuft wieder
+        read_tod;
+        expect_eq(tod_value, 32'h03153000, "Uhr stand waehrend des Stellens");
+        bus_read(4'hB);                                 // Stunden lesen: Anzeige friert ein
+        tod_ticks(10);                                  // 2 Zehntel vergehen
+        bus_read(4'h8);
+        expect_eq(dout, 8'h00, "eingefrorene Zehntel");
+        bus_read(4'h8);
+        expect_eq(dout, 8'h02, "Zehntel nach dem Freigeben");
+
+        // 13. Wecker auf 3:15:30,5
+        bus_write(4'hF, 8'h80);                         // Schreiben stellt den Wecker
+        set_tod(8'h03, 8'h15, 8'h30, 8'h05);
+        bus_write(4'hF, 8'h00);
+        bus_write(4'hD, 8'h84);                         // Wecker freigeben
+        tod_ticks(10);                                  // Uhr jetzt bei ,4
+        expect_eq(irq, 0, "irq vor der Weckzeit");
+        tod_ticks(5);
+        idle(2);
+        expect_eq(irq, 1, "irq zur Weckzeit");
+        bus_read(4'hD);
+        expect_eq(dout, 8'h84, "ICR zur Weckzeit");
+        bus_write(4'hD, 8'h7F);
+
+        // 14. FLAG
+        bus_write(4'hD, 8'h90);
+        @(negedge clk) flag_n = 1'b0;
+        idle(2);
+        expect_eq(irq, 1, "irq nach fallender Flanke an FLAG");
+        bus_read(4'hD);
+        expect_eq(dout, 8'h90, "ICR nach FLAG");
+        @(negedge clk) flag_n = 1'b1;
+        idle(2);
+        expect_eq(irq, 0, "irq nach steigender Flanke an FLAG");
+
         if (errors == 0) $display("PASS: tb_cia");
         else             $display("FAIL: tb_cia (%0d Fehler)", errors);
         $finish;
     end
 
     initial begin
-        #1_000_000;
+        #5_000_000;
         $display("FAIL: tb_cia Timeout");
         $finish;
     end
