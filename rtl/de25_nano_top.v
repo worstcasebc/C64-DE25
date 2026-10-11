@@ -1,4 +1,4 @@
-// de25_nano_top — Top-Level, Stand Meilenstein 2 (6502-Mini-System).
+// de25_nano_top — Top-Level, Stand Meilenstein 3 (C64-Speicherkarte).
 //
 // Zweck:  Board-Test für Takt, Reset, PLL, Taster, Schalter und LEDs.
 //           LEDR[0]   1-Hz-Herzschlag aus clk_50  (Boardtakt)
@@ -21,7 +21,9 @@
 
 module de25_nano_top #(
     parameter BLINK_HALF_PERIOD = 25_000_000,  // Takte pro halber Blinkperiode
-    parameter ROM_FILE          = "../sw/asm/build/hello.hex"
+    parameter BASIC_FILE        = "../sw/asm/build/banktest_basic.hex",
+    parameter CHAR_FILE         = "../sw/asm/build/banktest_char.hex",
+    parameter KERNAL_FILE       = "../sw/asm/build/banktest_kernal.hex"
 ) (
     input  wire       CLOCK0_50,
     input  wire [1:0] KEY,
@@ -78,13 +80,15 @@ module de25_nano_top #(
         .led_q (heartbeat_50_q)
     );
 
-    // Mini-Rechner: 6502 + RAM + ROM, Textausgabe über den UART.
-    // ROM-Pfad relativ zum Quartus-Projektverzeichnis (quartus/).
-    soc_mini #(
-        .ROM_FILE          (ROM_FILE),
+    // Rechner mit C64-Speicherkarte, Textausgabe über den UART.
+    // ROM-Pfade relativ zum Quartus-Projektverzeichnis (quartus/).
+    soc_c64 #(
+        .BASIC_FILE        (BASIC_FILE),
+        .CHAR_FILE         (CHAR_FILE),
+        .KERNAL_FILE       (KERNAL_FILE),
         .CPU_DIV           (50),    // 50 MHz / 50  = 1 MHz CPU-Schritte
         .UART_CLKS_PER_BIT (434)    // 50 MHz / 434 = 115200 Baud
-    ) u_soc_mini (
+    ) u_soc_c64 (
         .clk      (clk_50),
         .rst      (rst),
         .uart_txd (FPGA_UART_TX)

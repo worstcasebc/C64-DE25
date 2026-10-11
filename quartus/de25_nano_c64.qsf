@@ -11,11 +11,12 @@ set_global_assignment -name VERILOG_FILE ../rtl/de25_nano_top.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/blink.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/sync_2ff.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/uart_tx.v
-set_global_assignment -name VERILOG_FILE ../rtl/soc_mini.v
+set_global_assignment -name VERILOG_FILE ../rtl/soc_c64.v
 set_global_assignment -name VERILOG_FILE ../rtl/cpu/cpu_6502.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/cpu_port.v
 set_global_assignment -name VERILOG_FILE ../rtl/cpu/vendor/arlet_6502/cpu.v
 set_global_assignment -name VERILOG_FILE ../rtl/cpu/vendor/arlet_6502/ALU.v
-set_global_assignment -name VERILOG_FILE ../rtl/mem/addr_decode.v
+set_global_assignment -name VERILOG_FILE ../rtl/mem/c64_addr_decode.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/ram_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/rom_sync.v
 set_global_assignment -name SDC_FILE de25_nano_c64.sdc
