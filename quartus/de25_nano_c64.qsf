@@ -32,10 +32,12 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/audio/vendor/mister_sid/si
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/audio/vendor/mister_sid/sid_dac.sv
 set_global_assignment -name VERILOG_FILE ../rtl/video/hdmi_config.v
 set_global_assignment -name VERILOG_FILE ../rtl/soc_c64.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/cpu_6502.v
+set_global_assignment -name VHDL_FILE ../rtl/cpu/vendor/t65/T65_Pack.vhd
+set_global_assignment -name VHDL_FILE ../rtl/cpu/vendor/t65/T65_MCode.vhd
+set_global_assignment -name VHDL_FILE ../rtl/cpu/vendor/t65/T65_ALU.vhd
+set_global_assignment -name VHDL_FILE ../rtl/cpu/vendor/t65/T65.vhd
+set_global_assignment -name VHDL_FILE ../rtl/cpu/cpu_t65.vhd
 set_global_assignment -name VERILOG_FILE ../rtl/cpu/cpu_port.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/vendor/arlet_6502/cpu.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/vendor/arlet_6502/ALU.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/c64_addr_decode.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/ram_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/rom_sync.v
