@@ -22,6 +22,14 @@ set_global_assignment -name VERILOG_FILE ../rtl/video/video_colorbars.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/video_scandoubler.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/c64_palette.v
 set_global_assignment -name VHDL_FILE ../rtl/video/vendor/fpga64/video_vicII_656x.vhd
+set_global_assignment -name VERILOG_FILE ../rtl/audio/i2s_tx.v
+set_global_assignment -name VERILOG_FILE ../rtl/audio/audio_boxcar.v
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/audio/vendor/mister_sid/sid_top.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/audio/vendor/mister_sid/sid_voice.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/audio/vendor/mister_sid/sid_tables.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/audio/vendor/mister_sid/sid_filter.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/audio/vendor/mister_sid/sid_envelope.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/audio/vendor/mister_sid/sid_dac.sv
 set_global_assignment -name VERILOG_FILE ../rtl/video/hdmi_config.v
 set_global_assignment -name VERILOG_FILE ../rtl/soc_c64.v
 set_global_assignment -name VERILOG_FILE ../rtl/cpu/cpu_6502.v
@@ -142,6 +150,15 @@ set_instance_assignment -name IO_STANDARD "3.3-V LVCMOS" -to HDMI_TX_D[22] -enti
 set_location_assignment PIN_CU2 -to HDMI_TX_D[23]
 set_instance_assignment -name IO_STANDARD "3.3-V LVCMOS" -to HDMI_TX_D[23] -entity de25_nano_top
 
+# --- HDMI-Ton als I2S (Terasic golden_top.qsf) ------------------------------
+set_location_assignment PIN_CF1 -to HDMI_MCLK
+set_location_assignment PIN_BW1 -to HDMI_SCLK
+set_location_assignment PIN_BR6 -to HDMI_LRCLK
+set_location_assignment PIN_CB2 -to HDMI_I2S
+set_instance_assignment -name IO_STANDARD "3.3-V LVCMOS" -to HDMI_MCLK -entity de25_nano_top
+set_instance_assignment -name IO_STANDARD "3.3-V LVCMOS" -to HDMI_SCLK -entity de25_nano_top
+set_instance_assignment -name IO_STANDARD "3.3-V LVCMOS" -to HDMI_LRCLK -entity de25_nano_top
+set_instance_assignment -name IO_STANDARD "3.3-V LVCMOS" -to HDMI_I2S -entity de25_nano_top
 set_global_assignment -name PWRMGT_VOLTAGE_OUTPUT_FORMAT "LINEAR FORMAT"
 set_global_assignment -name PWRMGT_LINEAR_FORMAT_N "-12"
 set_global_assignment -name LAST_QUARTUS_VERSION "26.1.0 Pro Edition"

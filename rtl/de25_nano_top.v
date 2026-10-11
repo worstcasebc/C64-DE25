@@ -1,4 +1,4 @@
-// de25_nano_top — Top-Level, Stand Meilenstein 5 (echter VIC-II über HDMI).
+// de25_nano_top — Top-Level, Stand Meilenstein 6 (VIC-II und SID über HDMI).
 //
 // Zweck:  Verdrahtet den C64-Rechner mit dem Board.
 //           KEY[0]    Reset
@@ -14,7 +14,9 @@
 //                     auf der C64-Tastatur getippt (ascii_key_typer);
 //                     Ladeblöcke gehen direkt ins RAM (prg_loader)
 //           HDMI      Bild des VIC-II, zeilenverdoppelt (video_scandoubler):
-//                     720 x 576 bei 50 Hz über den HDMI-Sender ADV7513
+//                     720 x 576 bei 50 Hz über den HDMI-Sender ADV7513.
+//                     Dazu der Ton des SID als I2S (49,2 kHz, 16 Bit, auf
+//                     beiden Kanälen dasselbe).
 // Takte:  clk_sys = 31,5 MHz aus der PLL, die einzige Domäne. Das ist das
 //         Vierfache des C64-Pixeltakts; die CPU macht alle 32 Takte einen
 //         Schritt (984 kHz, 0,09 % langsamer als ein echter PAL-C64).
@@ -51,7 +53,11 @@ module de25_nano_top #(
     output wire        HDMI_TX_VS,
     output wire        HDMI_I2C_SCL,
     inout  wire        HDMI_I2C_SDA,
-    input  wire        HDMI_TX_INT
+    input  wire        HDMI_TX_INT,
+    output wire        HDMI_MCLK,
+    output wire        HDMI_SCLK,
+    output wire        HDMI_LRCLK,
+    output wire        HDMI_I2S
 );
 
     // Takte pro Zeiteinheit bei 31,5 MHz
@@ -173,6 +179,8 @@ module de25_nano_top #(
     wire [3:0] vic_color;
     wire       vic_hblank;
     wire       vic_vblank;
+    wire [17:0] sid_audio;
+    wire        cpu_tick;
 
     soc_c64 #(
         .BASIC_FILE        (BASIC_FILE),
@@ -192,7 +200,34 @@ module de25_nano_top #(
         .pix_en     (pix_en),
         .vic_color  (vic_color),
         .vic_hblank (vic_hblank),
-        .vic_vblank (vic_vblank)
+        .vic_vblank (vic_vblank),
+        .sid_audio  (sid_audio),
+        .cpu_tick   (cpu_tick)
+    );
+
+    // --- Ton: SID -> Mittelwert -> I2S zum HDMI-Sender ----------------------
+    // Der SID liefert 18 Bit mit Vorzeichen, einmal pro CPU-Takt. Über HDMI
+    // gehen die oberen 16 Bit des geglätteten Signals, links und rechts
+    // gleich.
+    wire signed [17:0] audio_avg_q;
+
+    audio_boxcar #(.W(18)) u_audio_boxcar (
+        .clk      (clk_sys),
+        .rst      (rst),
+        .in       (sid_audio),
+        .in_valid (cpu_tick),
+        .out_q    (audio_avg_q)
+    );
+
+    i2s_tx u_i2s_tx (
+        .clk     (clk_sys),
+        .rst     (rst),
+        .left    (audio_avg_q[17:2]),
+        .right   (audio_avg_q[17:2]),
+        .mclk_q  (HDMI_MCLK),
+        .sclk_q  (HDMI_SCLK),
+        .lrclk_q (HDMI_LRCLK),
+        .sdata_q (HDMI_I2S)
     );
 
     // --- HDMI: C64-Bild oder Testbild ---------------------------------------

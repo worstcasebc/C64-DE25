@@ -109,8 +109,8 @@ Punkten nimmt der Monitor des Entwicklers das als „720x576, 50 Hz" an; mit
 not supported"). Der Pixeltakt kommt aus `quartus/ip/pll_c64.ip` (50 MHz ->
 2 x 31,5 MHz, 0 und 180 Grad; der verschobene Takt geht an `HDMI_TX_CLK`).
 
-Audio (erst ab Meilenstein 6 relevant, alle 3.3-V LVCMOS): HDMI_MCLK PIN_CF1,
-HDMI_SCLK PIN_BW1, HDMI_LRCLK PIN_BR6, HDMI_I2S PIN_CB2.
+Ton als I2S (alle 3.3-V LVCMOS): HDMI_MCLK PIN_CF1, HDMI_SCLK PIN_BW1,
+HDMI_LRCLK PIN_BR6, HDMI_I2S PIN_CB2.
 
 ## Hinweis zum I/O-Standard
 

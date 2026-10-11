@@ -31,10 +31,15 @@ set_false_path -to [get_ports {HDMI_TX_CLK HDMI_TX_D[*] HDMI_TX_DE HDMI_TX_HS HD
 # I2C zum HDMI-Sender: 100 kHz, ein Viertel-Bit dauert 79 Takte.
 set_false_path -to [get_ports {HDMI_I2C_SCL HDMI_I2C_SDA}]
 
+# I2S-Ton zum HDMI-Sender: Der Empfänger übernimmt die Daten mit der
+# steigenden Flanke von HDMI_SCLK, eine halbe Bitzeit (knapp 160 ns) nach dem
+# Wechsel. Laufzeitunterschiede zwischen den Pins spielen dagegen keine Rolle.
+set_false_path -to [get_ports {HDMI_MCLK HDMI_SCLK HDMI_LRCLK HDMI_I2S}]
+
 # Der Design Assistant (Regel TMC-20012) verlangt für jeden Ausgang eine
 # Angabe, relativ zu welchem Takt er betrachtet wird — auch wenn der Pfad
 # oben vom Timing ausgenommen ist. 0 ns = "keine externe Anforderung".
-set_output_delay -clock $clk_sys 0 [get_ports {LEDR[*] FPGA_UART_TX HDMI_TX_CLK HDMI_TX_D[*] HDMI_TX_DE HDMI_TX_HS HDMI_TX_VS HDMI_I2C_SCL HDMI_I2C_SDA}]
+set_output_delay -clock $clk_sys 0 [get_ports {LEDR[*] FPGA_UART_TX HDMI_TX_CLK HDMI_TX_D[*] HDMI_TX_DE HDMI_TX_HS HDMI_TX_VS HDMI_I2C_SCL HDMI_I2C_SDA HDMI_MCLK HDMI_SCLK HDMI_LRCLK HDMI_I2S}]
 
 # JTAG-Takt: existiert nur, wenn Signal Tap (oder anderes JTAG-Debug) im
 # Design steckt. Er kommt vom USB-Blaster und hat keinen Bezug zu clk_sys,
