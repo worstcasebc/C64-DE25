@@ -5,6 +5,7 @@ Aufruf (aus dem Projektverzeichnis):
     python tb/screenshot.py --roms test  Test-ROMs (sw/asm/banktest.s)
     python tb/screenshot.py --wait 500000 -o bild.png
     python tb/screenshot.py --type "PRINT3+4"   nach dem Start Text + Enter tippen
+    python tb/screenshot.py --load demo.prg --type RUN   erst Programm laden
 
 Lässt tb_c64_video laufen: Der Rechner arbeitet --wait Takte lang (ein Takt =
 ein CPU-Schritt), dann wird ein Bild aufgezeichnet. Das Original-KERNAL
@@ -18,6 +19,9 @@ import zlib
 from pathlib import Path
 
 import run_sim
+
+sys.path.insert(0, str(run_sim.ROOT / "sw" / "py"))
+import c64_term  # noqa: E402  (liefert die Ladeblöcke für eine .PRG-Datei)
 
 ROOT = run_sim.ROOT
 BUILD = run_sim.BUILD
@@ -52,6 +56,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--roms", choices=["c64", "test"], default="c64", help="ROM-Satz (Default: c64)")
     parser.add_argument("--wait", type=int, help="Takte vor der Aufnahme")
+    parser.add_argument("--load", type=Path, metavar="DATEI", help=".PRG-Datei, die nach der Wartezeit geladen wird")
     parser.add_argument("--type", dest="text", help="Text, der nach der Wartezeit getippt wird (ohne Leerzeichen)")
     parser.add_argument("-o", "--output", type=Path, default=BUILD / "screenshot.png")
     args = parser.parse_args()
@@ -70,6 +75,10 @@ def main() -> int:
     else:
         plusargs = [f"+wait={args.wait or 100_000}"]
 
+    if args.load:
+        blocks = c64_term.prg_to_blocks(args.load.read_bytes())
+        (BUILD / "load_bytes.hex").write_text("".join(f"{b:02X}\n" for b in blocks))
+        plusargs += ["+load=tb/build/load_bytes.hex", f"+loadlen={len(blocks)}"]
     if args.text:
         plusargs.append(f"+type={args.text}")
 
