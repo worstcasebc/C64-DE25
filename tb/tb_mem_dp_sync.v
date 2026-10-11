@@ -5,6 +5,8 @@
 //      3. Schreiben über A und Lesen derselben Zelle über B im selben Takt
 //         liefert den alten Inhalt, einen Takt später den neuen.
 //      4. Bei b_en = 0 bleibt der Ausgang von B stehen; A arbeitet weiter.
+//      6. Schreiben über A bei a_en = 0: Die Zelle ändert sich, der
+//         Leseausgang von A nicht.
 // ROM: 5. Beide Anschlüsse lesen unabhängig (Inhalt: tb/data/rom_test.hex).
 
 `timescale 1ns / 1ps
@@ -105,6 +107,13 @@ module tb_mem_dp_sync;
             expect_val(rom_a, 8'h10 + i[7:0] * 8'h11, "ROM ueber A");
             expect_val(rom_b, 8'hFE - i[7:0] * 8'h11, "ROM ueber B");
         end
+
+        // 6. Schreiben ohne Lesefreigabe (zuletzt über A gelesen: Zelle 5 -> A5)
+        access(1'b1, 1'b0, 4'h5, 8'h00, 1'b0, 4'h0);
+        access(1'b0, 1'b1, 4'h9, 8'h99, 1'b0, 4'h0);
+        expect_val(ram_a, 8'hA5, "RAM-Ausgang A nach Schreiben ohne a_en");
+        access(1'b1, 1'b0, 4'h9, 8'h00, 1'b0, 4'h0);
+        expect_val(ram_a, 8'h99, "RAM-Inhalt nach Schreiben ohne a_en");
 
         if (errors == 0) $display("PASS: tb_mem_dp_sync");
         else             $display("FAIL: tb_mem_dp_sync (%0d Fehler)", errors);

@@ -3,11 +3,13 @@
 // Zweck:  Wie ram_sync, aber mit zwei Türen zur selben Bibliothek:
 //         Anschluss A liest und schreibt (CPU), Anschluss B liest nur
 //         (Video). Beide arbeiten unabhängig mit eigener Adresse.
-// Takt:   clk für beide Anschlüsse; jeder hat eine eigene Taktfreigabe.
-// Ports:  a_we = 1 schreibt a_din nach a_addr. Lesedaten erscheinen eine
-//         Flanke nach der Adresse. Wird eine Zelle im selben Takt
-//         beschrieben und gelesen, liefern beide Anschlüsse noch den alten
-//         Inhalt.
+// Takt:   clk für beide Anschlüsse; jeder hat eine eigene Lesefreigabe.
+// Ports:  a_we = 1 schreibt a_din nach a_addr — unabhängig von a_en. So
+//         kann jemand über Anschluss A schreiben, ohne dass sich dessen
+//         Leseausgang ändert (siehe DMA in soc_c64).
+//         a_en/b_en = 1: Lesedaten erscheinen eine Flanke nach der Adresse.
+//         Wird eine Zelle im selben Takt beschrieben und gelesen, liefern
+//         beide Anschlüsse noch den alten Inhalt.
 // Inhalt: Beim Start überall 0 — wie das Block-RAM im FPGA nach dem Laden.
 //         Ohne diese Angabe wäre der Inhalt in der Simulation unbestimmt.
 
@@ -39,10 +41,8 @@ module ram_dp_sync #(
     // synthesis translate_on
 
     always @(posedge clk) begin
-        if (a_en) begin
-            if (a_we) mem[a_addr] <= a_din;
-            a_dout_q <= mem[a_addr];
-        end
+        if (a_we) mem[a_addr] <= a_din;
+        if (a_en) a_dout_q <= mem[a_addr];
     end
 
     always @(posedge clk) begin
