@@ -19,14 +19,13 @@
 #
 # Quartus Prime
 # Version 26.1.0 Build 110 03/26/2026 SC Pro Edition
-# Date created = 14:24:12  October 11, 2026
+# Date created = 16:18:17  October 11, 2026
 #
 # -------------------------------------------------------------------------- #
 
 QUARTUS_VERSION = "26.1"
-DATE = "14:24:12  October 11, 2026"
+DATE = "16:18:17  October 11, 2026"
 
 # Revisions
 
-PROJECT_REVISION = "pal_test"
 PROJECT_REVISION = "de25_nano_c64"

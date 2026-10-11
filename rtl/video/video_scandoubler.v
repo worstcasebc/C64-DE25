@@ -19,7 +19,7 @@
 //         r_q/g_q/b_q, de_q, hsync_q, vsync_q — Bild für HDMI; hsync/vsync
 //         sind 1 während des Impulses.
 // Rahmen: Rund um das sichtbare Fenster liegen die Lücken wie beim
-//         erprobten Raster aus pal_test_top: waagerecht 72 + 96 (Sync) +
+//         am Monitor erprobten Raster (docs/pinout.md): waagerecht 72 + 96 (Sync) +
 //         120, senkrecht 8 + 6 (Sync) + 34.
 
 `default_nettype none

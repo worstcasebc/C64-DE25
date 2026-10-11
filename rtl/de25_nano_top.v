@@ -217,7 +217,7 @@ module de25_nano_top #(
     );
 
     // Testbild im selben Raster (1008 x 624, sichtbar 720 x 576), wie es in
-    // pal_test_top am Monitor erprobt wurde.
+    // der Monitortest gezeigt hat (siehe docs/pinout.md, Bildformat).
     wire [11:0] bars_x;
     wire [11:0] bars_y;
     wire        bars_de;
