@@ -1,16 +1,14 @@
 // de25_nano_top — Top-Level, Stand Meilenstein 4 (Textmodus über HDMI).
 //
-// Zweck:  Board-Test für Takt, Reset, PLL, Taster, Schalter und LEDs.
-//           LEDR[0]   1-Hz-Herzschlag aus clk_50  (Boardtakt)
-//           LEDR[2:1] Schalter SW[1:0]; SW[0] = 1 zeigt statt des
-//                     C64-Bildes das Testbild mit Farbbalken
-//           LEDR[3]   HDMI-Sender bestätigt den letzten I2C-Zugriff nicht,
-//                     oder die Warteschlange der Tastatur ist voll
-//           LEDR[4]   HDMI-Sender fertig konfiguriert
-//           LEDR[5]   KEY1 gedrückt, es wird getippt oder geladen
-//           LEDR[6]   2-Hz-Herzschlag aus clk_100 (PLL) — blinkt nur, wenn
-//                     die PLL eingerastet ist
-//           LEDR[7]   Reset aktiv (KEY0 gedrückt)
+// Zweck:  Verdrahtet den C64-Rechner mit dem Board.
+//           KEY[0]    Reset
+//           SW[0]     1 zeigt statt des C64-Bildes das Testbild mit
+//                     Farbbalken
+//           LEDR[0]   1-Hz-Herzschlag aus clk_50 (Boardtakt)
+//           LEDR[7:1] aus. Die früheren Anzeigen (HDMI fertig, I2C-Fehler,
+//                     Warteschlange voll, Tippen/Laden, Reset) gibt es
+//                     intern weiter als Signale; bei Bedarf unten in "LEDs"
+//                     wieder anschließen.
 //           FPGA_UART_TX  Textausgabe des 6502-Programms, 115200 Baud 8N1,
 //                     über den FTDI-Chip am Type-C-Anschluss
 //           FPGA_UART_RX  Tastatur-Ersatz: Zeichen aus dem Terminal werden
@@ -18,15 +16,14 @@
 //                     Ladeblöcke gehen direkt ins RAM (prg_loader)
 //           HDMI      C64-Textbildschirm (video_text) in 640x480 über den
 //                     HDMI-Sender ADV7513
-// Takte:  clk_50  = CLOCK0_50 (50 MHz, Boardoszillator)
-//         clk_100 = PLL-Ausgang (100 MHz, aus clk_50 abgeleitet)
-//         Übergänge zwischen den Domänen nur über sync_2ff.
+// Takte:  clk_50 = CLOCK0_50 (50 MHz, Boardoszillator), die einzige Domäne.
+//         Asynchrone Eingänge kommen nur über sync_2ff herein.
 //         Das Video läuft in clk_50 mit Taktfreigabe in jedem zweiten Takt
 //         (Pixeltakt 25 MHz statt der genormten 25,175 MHz, also 59,5 Hz).
 // Ports:  Namen wie im Terasic-Handbuch (Großschreibung nur hier im Top-Level).
 //         KEY und LEDR sind low-aktiv; intern wird alles high-aktiv geführt.
-// IP:     pll_sys und reset_release sind Intel-IP (quartus/ip/*.ip) und in
-//         Icarus nicht simulierbar — deshalb bleibt hier nur Verdrahtung.
+// IP:     reset_release ist Intel-IP (quartus/ip/*.ip) und in Icarus nicht
+//         simulierbar — deshalb bleibt hier nur Verdrahtung.
 
 `default_nettype none
 
@@ -64,18 +61,8 @@ module de25_nano_top #(
         .ninit_done (ninit_done)
     );
 
-    // --- PLL: 50 MHz -> 100 MHz ---------------------------------------------
-    wire clk_100;
-    wire pll_locked;
 
-    pll_sys u_pll_sys (
-        .refclk   (clk_50),
-        .rst      (ninit_done),
-        .outclk_0 (clk_100),
-        .locked   (pll_locked)
-    );
-
-    // --- Domäne clk_50 ------------------------------------------------------
+    // --- Eingänge und Reset -------------------------------------------------
     // Taster/Schalter/ninit_done in die Taktdomäne holen (Taster high-aktiv).
     wire [1:0] key_q;
     wire [3:0] sw_q;
@@ -329,32 +316,12 @@ module de25_nano_top #(
     assign HDMI_I2C_SCL = ~hdmi_scl_oe_q;
     assign HDMI_I2C_SDA = hdmi_sda_oe_q ? 1'b0 : 1'bz;
 
-    // --- Domäne clk_100 -----------------------------------------------------
-    // Eigener Reset: aktiv, solange rst anliegt oder die PLL nicht eingerastet ist.
-    wire rst_sync_100_q;
-    wire pll_locked_100_q;
-
-    sync_2ff #(.WIDTH(2)) u_sync_rst_100 (
-        .clk      (clk_100),
-        .d_async  ({rst, pll_locked}),
-        .d_sync_q ({rst_sync_100_q, pll_locked_100_q})
-    );
-
-    wire rst_100 = rst_sync_100_q | ~pll_locked_100_q;
-
-    wire heartbeat_100_q;
-
-    blink #(.HALF_PERIOD(BLINK_HALF_PERIOD)) u_blink_100 (
-        .clk   (clk_100),
-        .rst   (rst_100),
-        .led_q (heartbeat_100_q)
-    );
 
     // --- LEDs ---------------------------------------------------------------
-    // Interne Sicht: 1 = LED an. LEDs dürfen direkt aus beiden Domänen kommen,
-    // weil sie nur das Auge erreichen und keine weitere Logik.
-    wire [7:0] led = {rst, heartbeat_100_q, key_q[1] | typer_busy | loader_active, hdmi_ready_q, hdmi_nack_q | key_fifo_full,
-                      sw_q[1:0], heartbeat_50_q};
+    // Interne Sicht: 1 = LED an. Nur der Herzschlag ist angeschlossen.
+    // Zum Fehlersuchen bieten sich an: hdmi_ready_q, hdmi_nack_q,
+    // key_fifo_full, typer_busy, loader_active, rst.
+    wire [7:0] led = {7'b0, heartbeat_50_q};
 
     assign LEDR = ~led;
 

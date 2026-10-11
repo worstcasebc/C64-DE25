@@ -145,7 +145,6 @@ set_instance_assignment -name IO_STANDARD "3.3-V LVCMOS" -to HDMI_TX_D[23] -enti
 set_global_assignment -name PWRMGT_VOLTAGE_OUTPUT_FORMAT "LINEAR FORMAT"
 set_global_assignment -name PWRMGT_LINEAR_FORMAT_N "-12"
 set_global_assignment -name LAST_QUARTUS_VERSION "26.1.0 Pro Edition"
-set_global_assignment -name IP_FILE ip/pll_sys.ip
 set_global_assignment -name IP_FILE ip/reset_release.ip
 set_global_assignment -name ENABLE_SIGNALTAP ON
 set_global_assignment -name USE_SIGNALTAP_FILE de25_nano_c64.stp
