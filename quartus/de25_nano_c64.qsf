@@ -19,8 +19,9 @@ set_global_assignment -name VERILOG_FILE ../rtl/io/ascii_key_typer.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/prg_loader.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/video_timing.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/video_colorbars.v
-set_global_assignment -name VERILOG_FILE ../rtl/video/video_text.v
-set_global_assignment -name VERILOG_FILE ../rtl/video/vic_stub.v
+set_global_assignment -name VERILOG_FILE ../rtl/video/video_scandoubler.v
+set_global_assignment -name VERILOG_FILE ../rtl/video/c64_palette.v
+set_global_assignment -name VHDL_FILE ../rtl/video/vendor/fpga64/video_vicII_656x.vhd
 set_global_assignment -name VERILOG_FILE ../rtl/video/hdmi_config.v
 set_global_assignment -name VERILOG_FILE ../rtl/soc_c64.v
 set_global_assignment -name VERILOG_FILE ../rtl/cpu/cpu_6502.v
@@ -33,7 +34,6 @@ set_global_assignment -name VERILOG_FILE ../rtl/mem/rom_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/ram_dp_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/rom_dp_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/fifo_sync.v
-set_global_assignment -name SDC_FILE de25_nano_c64.sdc
 
 # --- Takt (Tabelle 3-6) ----------------------------------------------------
 set_location_assignment PIN_DJ35 -to CLOCK0_50
@@ -146,6 +146,10 @@ set_global_assignment -name PWRMGT_VOLTAGE_OUTPUT_FORMAT "LINEAR FORMAT"
 set_global_assignment -name PWRMGT_LINEAR_FORMAT_N "-12"
 set_global_assignment -name LAST_QUARTUS_VERSION "26.1.0 Pro Edition"
 set_global_assignment -name IP_FILE ip/reset_release.ip
-set_global_assignment -name ENABLE_SIGNALTAP ON
+set_global_assignment -name IP_FILE ip/pll_c64.ip
+# Die eigene .sdc muss nach der PLL-IP stehen: Sie benutzt deren Takte, und
+# Quartus liest die Dateien in dieser Reihenfolge.
+set_global_assignment -name SDC_FILE de25_nano_c64.sdc
+set_global_assignment -name ENABLE_SIGNALTAP OFF
 set_global_assignment -name USE_SIGNALTAP_FILE de25_nano_c64.stp
 set_global_assignment -name SIGNALTAP_FILE de25_nano_c64.stp

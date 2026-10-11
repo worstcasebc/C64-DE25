@@ -1,34 +1,36 @@
-// de25_nano_top — Top-Level, Stand Meilenstein 4 (Textmodus über HDMI).
+// de25_nano_top — Top-Level, Stand Meilenstein 5 (echter VIC-II über HDMI).
 //
 // Zweck:  Verdrahtet den C64-Rechner mit dem Board.
 //           KEY[0]    Reset
 //           SW[0]     1 zeigt statt des C64-Bildes das Testbild mit
 //                     Farbbalken
-//           LEDR[0]   1-Hz-Herzschlag aus clk_50 (Boardtakt)
-//           LEDR[7:1] aus. Die früheren Anzeigen (HDMI fertig, I2C-Fehler,
-//                     Warteschlange voll, Tippen/Laden, Reset) gibt es
-//                     intern weiter als Signale; bei Bedarf unten in "LEDs"
-//                     wieder anschließen.
+//           LEDR[0]   1-Hz-Herzschlag aus clk_sys — blinkt nur, wenn die
+//                     PLL läuft
+//           LEDR[7:1] aus. Zum Fehlersuchen stehen intern Signale bereit,
+//                     siehe unten in "LEDs".
 //           FPGA_UART_TX  Textausgabe des 6502-Programms, 115200 Baud 8N1,
 //                     über den FTDI-Chip am Type-C-Anschluss
 //           FPGA_UART_RX  Tastatur-Ersatz: Zeichen aus dem Terminal werden
 //                     auf der C64-Tastatur getippt (ascii_key_typer);
 //                     Ladeblöcke gehen direkt ins RAM (prg_loader)
-//           HDMI      C64-Textbildschirm (video_text) in 640x480 über den
-//                     HDMI-Sender ADV7513
-// Takte:  clk_50 = CLOCK0_50 (50 MHz, Boardoszillator), die einzige Domäne.
+//           HDMI      Bild des VIC-II, zeilenverdoppelt (video_scandoubler):
+//                     720 x 576 bei 50 Hz über den HDMI-Sender ADV7513
+// Takte:  clk_sys = 31,5 MHz aus der PLL, die einzige Domäne. Das ist das
+//         Vierfache des C64-Pixeltakts; die CPU macht alle 32 Takte einen
+//         Schritt (984 kHz, 0,09 % langsamer als ein echter PAL-C64).
+//         HDMI_TX_CLK ist derselbe Takt um 180 Grad verschoben: Die Daten
+//         wechseln mit clk_sys, der Sender übernimmt sie eine halbe Periode
+//         später, mitten im gültigen Bereich.
 //         Asynchrone Eingänge kommen nur über sync_2ff herein.
-//         Das Video läuft in clk_50 mit Taktfreigabe in jedem zweiten Takt
-//         (Pixeltakt 25 MHz statt der genormten 25,175 MHz, also 59,5 Hz).
 // Ports:  Namen wie im Terasic-Handbuch (Großschreibung nur hier im Top-Level).
 //         KEY und LEDR sind low-aktiv; intern wird alles high-aktiv geführt.
-// IP:     reset_release ist Intel-IP (quartus/ip/*.ip) und in Icarus nicht
-//         simulierbar — deshalb bleibt hier nur Verdrahtung.
+// IP:     pll_c64 (50 MHz -> 2 x 31,5 MHz, 0 und 180 Grad) und reset_release
+//         sind Intel-IP (quartus/ip/*.ip) und nicht simulierbar — deshalb
+//         bleibt hier nur Verdrahtung.
 
 `default_nettype none
 
 module de25_nano_top #(
-    parameter BLINK_HALF_PERIOD = 25_000_000,  // Takte pro halber Blinkperiode
     // Original-ROMs des C64: liegen nur lokal in roms/ und werden von
     // sw/py/build_rom.py umgewandelt. Ohne sie: banktest_basic.hex,
     // banktest_char.hex und banktest_kernal.hex eintragen (Test-ROMs).
@@ -36,12 +38,12 @@ module de25_nano_top #(
     parameter CHAR_FILE         = "../sw/asm/build/c64_chargen.hex",
     parameter KERNAL_FILE       = "../sw/asm/build/c64_kernal.hex"
 ) (
-    input  wire       CLOCK0_50,
-    input  wire [1:0] KEY,
-    input  wire [3:0] SW,
-    output wire [7:0] LEDR,
-    output wire       FPGA_UART_TX,
-    input  wire       FPGA_UART_RX,
+    input  wire        CLOCK0_50,
+    input  wire [1:0]  KEY,
+    input  wire [3:0]  SW,
+    output wire [7:0]  LEDR,
+    output wire        FPGA_UART_TX,
+    input  wire        FPGA_UART_RX,
     output wire        HDMI_TX_CLK,
     output wire [23:0] HDMI_TX_D,
     output wire        HDMI_TX_DE,
@@ -52,58 +54,57 @@ module de25_nano_top #(
     input  wire        HDMI_TX_INT
 );
 
-    wire clk_50 = CLOCK0_50;
+    // Takte pro Zeiteinheit bei 31,5 MHz
+    localparam CLK_HZ       = 31_500_000;
+    localparam UART_DIV     = 273;              // 31,5 MHz / 273 = 115385 Baud (0,16 % daneben)
+    localparam KEY_CLKS     = CLK_HZ / 25;      // 40 ms Tastendruck bzw. Pause
+    localparam TIMEOUT_CLKS = CLK_HZ / 2;       // 0,5 s
+    localparam I2C_QUARTER  = 79;               // 31,5 MHz / (4 * 79) = 100 kHz
+    localparam STARTUP_CLKS = CLK_HZ / 5;       // 0,2 s
 
-    // --- Reset Release: 1, solange das FPGA noch konfiguriert wird ----------
+    // --- Reset Release und PLL ----------------------------------------------
     wire ninit_done;
 
     reset_release u_reset_release (
         .ninit_done (ninit_done)
     );
 
+    wire clk_sys;
+    wire clk_sys_180;
+    wire pll_locked;
+
+    pll_c64 u_pll_c64 (
+        .refclk   (CLOCK0_50),
+        .rst      (ninit_done),
+        .outclk_0 (clk_sys),
+        .outclk_1 (clk_sys_180),
+        .locked   (pll_locked)
+    );
 
     // --- Eingänge und Reset -------------------------------------------------
-    // Taster/Schalter/ninit_done in die Taktdomäne holen (Taster high-aktiv).
-    wire [1:0] key_q;
-    wire [3:0] sw_q;
+    // Taster, Schalter, ninit_done und locked in die Taktdomäne holen.
+    wire       key0_q;
+    wire       sw0_q;
     wire       ninit_done_q;
+    wire       pll_locked_q;
 
-    sync_2ff #(.WIDTH(3)) u_sync_key (
-        .clk      (clk_50),
-        .d_async  ({ninit_done, ~KEY}),
-        .d_sync_q ({ninit_done_q, key_q})
+    sync_2ff #(.WIDTH(4)) u_sync_in (
+        .clk      (clk_sys),
+        .d_async  ({pll_locked, ninit_done, ~KEY[0], SW[0]}),
+        .d_sync_q ({pll_locked_q, ninit_done_q, key0_q, sw0_q})
     );
 
-    sync_2ff #(.WIDTH(4)) u_sync_sw (
-        .clk      (clk_50),
-        .d_async  (SW),
-        .d_sync_q (sw_q)
-    );
+    wire rst = key0_q | ninit_done_q | ~pll_locked_q;
 
-    wire rst = key_q[0] | ninit_done_q;
+    wire heartbeat_q;
 
-    wire heartbeat_50_q;
-
-    blink #(.HALF_PERIOD(BLINK_HALF_PERIOD)) u_blink_50 (
-        .clk   (clk_50),
+    blink #(.HALF_PERIOD(CLK_HZ / 2)) u_blink (
+        .clk   (clk_sys),
         .rst   (rst),
-        .led_q (heartbeat_50_q)
+        .led_q (heartbeat_q)
     );
 
-    // Pixeltakt: pix_clk_q wechselt in jedem Takt und geht als 25-MHz-Takt
-    // an den HDMI-Sender. Die Videoregister schalten in den Takten mit
-    // pix_clk_q = 1, also genau dann, wenn der Takt am Pin fällt. Der Sender
-    // übernimmt die Daten mit der steigenden Flanke — 20 ns später, mitten im
-    // gültigen Bereich.
-    reg pix_clk_q;
-
-    always @(posedge clk_50) begin
-        if (rst) pix_clk_q <= 1'b0;
-        else     pix_clk_q <= ~pix_clk_q;
-    end
-
-    wire pix_en = pix_clk_q;
-
+    // --- Tastatur-Ersatz und Lader über den UART ----------------------------
     // Vom PC (115200 Baud) kommen Tastendrücke und Ladeblöcke. prg_loader
     // trennt sie: Tastendrücke warten in einer Schlange für 4096 Zeichen und
     // werden nacheinander getippt, Ladedaten gehen direkt ins RAM.
@@ -123,16 +124,16 @@ module de25_nano_top #(
     wire        dma_ack;
     wire        loader_active;
 
-    uart_rx #(.CLKS_PER_BIT(434)) u_uart_rx (
-        .clk     (clk_50),
+    uart_rx #(.CLKS_PER_BIT(UART_DIV)) u_uart_rx (
+        .clk     (clk_sys),
         .rst     (rst),
         .rxd     (FPGA_UART_RX),
         .data_q  (rx_data_q),
         .valid_q (rx_valid_q)
     );
 
-    prg_loader u_prg_loader (
-        .clk       (clk_50),
+    prg_loader #(.TIMEOUT_CLKS(TIMEOUT_CLKS)) u_prg_loader (
+        .clk       (clk_sys),
         .rst       (rst),
         .rx_data   (rx_data_q),
         .rx_valid  (rx_valid_q),
@@ -146,7 +147,7 @@ module de25_nano_top #(
     );
 
     fifo_sync #(.ADDR_W(12)) u_key_fifo (
-        .clk    (clk_50),
+        .clk    (clk_sys),
         .rst    (rst),
         .wr_en  (key_valid),
         .din    (key_data),
@@ -156,8 +157,8 @@ module de25_nano_top #(
         .empty  (key_fifo_empty)
     );
 
-    ascii_key_typer u_key_typer (
-        .clk        (clk_50),
+    ascii_key_typer #(.PRESS_CLKS(KEY_CLKS), .RELEASE_CLKS(KEY_CLKS)) u_key_typer (
+        .clk        (clk_sys),
         .rst        (rst),
         .fifo_empty (key_fifo_empty),
         .fifo_data  (key_fifo_data),
@@ -166,88 +167,75 @@ module de25_nano_top #(
         .keys       (keys)
     );
 
-    // Rechner mit C64-Speicherkarte. Das Video liest über vid_* aus RAM und
-    // Char-ROM. ROM-Pfade relativ zum Quartus-Projektverzeichnis (quartus/).
-    wire [15:0] vid_ram_addr;
-    wire [7:0]  vid_ram_dout;
-    wire [9:0]  vid_color_addr;
-    wire [3:0]  vid_color_dout;
-    wire [11:0] vid_char_addr;
-    wire [7:0]  vid_char_dout;
-    wire [3:0]  border_color;
-    wire [3:0]  bg_color;
+    // --- Der C64 ------------------------------------------------------------
+    // ROM-Pfade relativ zum Quartus-Projektverzeichnis (quartus/).
+    wire       pix_en;
+    wire [3:0] vic_color;
+    wire       vic_hblank;
+    wire       vic_vblank;
 
     soc_c64 #(
         .BASIC_FILE        (BASIC_FILE),
         .CHAR_FILE         (CHAR_FILE),
         .KERNAL_FILE       (KERNAL_FILE),
-        .CPU_DIV           (50),    // 50 MHz / 50  = 1 MHz CPU-Schritte
-        .UART_CLKS_PER_BIT (434)    // 50 MHz / 434 = 115200 Baud
+        .PIX_DIV           (4),         // 31,5 MHz / 4 = Pixeltakt 7,875 MHz
+        .UART_CLKS_PER_BIT (UART_DIV)
     ) u_soc_c64 (
-        .clk            (clk_50),
-        .rst            (rst),
-        .uart_txd       (FPGA_UART_TX),
-        .keys           (keys),
-        .dma_req        (dma_req),
-        .dma_addr       (dma_addr),
-        .dma_data       (dma_data),
-        .dma_ack        (dma_ack),
-        .vid_en         (pix_en),
-        .vid_ram_addr   (vid_ram_addr),
-        .vid_ram_dout   (vid_ram_dout),
-        .vid_color_addr (vid_color_addr),
-        .vid_color_dout (vid_color_dout),
-        .vid_char_addr  (vid_char_addr),
-        .vid_char_dout  (vid_char_dout),
-        .border_color   (border_color),
-        .bg_color       (bg_color)
+        .clk        (clk_sys),
+        .rst        (rst),
+        .uart_txd   (FPGA_UART_TX),
+        .keys       (keys),
+        .dma_req    (dma_req),
+        .dma_addr   (dma_addr),
+        .dma_data   (dma_data),
+        .dma_ack    (dma_ack),
+        .pix_en     (pix_en),
+        .vic_color  (vic_color),
+        .vic_hblank (vic_hblank),
+        .vic_vblank (vic_vblank)
     );
 
-    // --- HDMI: C64-Textbildschirm oder Testbild ------------------------------
-    wire [11:0] video_x;
-    wire [11:0] video_y;
-    wire        video_de;
-    wire        video_hsync;
-    wire        video_vsync;
+    // --- HDMI: C64-Bild oder Testbild ---------------------------------------
+    wire [23:0] c64_rgb_q;
+    wire        c64_de_q;
+    wire        c64_hsync_q;
+    wire        c64_vsync_q;
 
-    video_timing u_video_timing (
-        .clk   (clk_50),
+    video_scandoubler u_scandoubler (
+        .clk     (clk_sys),
+        .rst     (rst),
+        .pix_en  (pix_en),
+        .color   (vic_color),
+        .hblank  (vic_hblank),
+        .vblank  (vic_vblank),
+        .r_q     (c64_rgb_q[23:16]),
+        .g_q     (c64_rgb_q[15:8]),
+        .b_q     (c64_rgb_q[7:0]),
+        .de_q    (c64_de_q),
+        .hsync_q (c64_hsync_q),
+        .vsync_q (c64_vsync_q)
+    );
+
+    // Testbild im selben Raster (1008 x 624, sichtbar 720 x 576), wie es in
+    // pal_test_top am Monitor erprobt wurde.
+    wire [11:0] bars_x;
+    wire [11:0] bars_y;
+    wire        bars_de;
+    wire        bars_hsync;
+    wire        bars_vsync;
+
+    video_timing #(
+        .H_ACTIVE (720), .H_FP (72), .H_SYNC (96), .H_BP (120),
+        .V_ACTIVE (576), .V_FP (8),  .V_SYNC (6),  .V_BP (34)
+    ) u_bars_timing (
+        .clk   (clk_sys),
         .rst   (rst),
-        .en    (pix_en),
-        .x_q   (video_x),
-        .y_q   (video_y),
-        .de    (video_de),
-        .hsync (video_hsync),
-        .vsync (video_vsync)
-    );
-
-    wire [23:0] text_rgb_q;
-    wire        text_de_q;
-    wire        text_hsync_q;
-    wire        text_vsync_q;
-
-    video_text u_video_text (
-        .clk          (clk_50),
-        .en           (pix_en),
-        .x            (video_x),
-        .y            (video_y),
-        .de           (video_de),
-        .hsync        (video_hsync),
-        .vsync        (video_vsync),
-        .border_color (border_color),
-        .bg_color     (bg_color),
-        .ram_addr     (vid_ram_addr),
-        .ram_dout     (vid_ram_dout),
-        .color_addr   (vid_color_addr),
-        .color_dout   (vid_color_dout),
-        .char_addr    (vid_char_addr),
-        .char_dout    (vid_char_dout),
-        .r_q          (text_rgb_q[23:16]),
-        .g_q          (text_rgb_q[15:8]),
-        .b_q          (text_rgb_q[7:0]),
-        .de_q         (text_de_q),
-        .hsync_q      (text_hsync_q),
-        .vsync_q      (text_vsync_q)
+        .en    (1'b1),
+        .x_q   (bars_x),
+        .y_q   (bars_y),
+        .de    (bars_de),
+        .hsync (bars_hsync),
+        .vsync (bars_vsync)
     );
 
     wire [23:0] bars_rgb_q;
@@ -255,14 +243,14 @@ module de25_nano_top #(
     wire        bars_hsync_q;
     wire        bars_vsync_q;
 
-    video_colorbars u_video_colorbars (
-        .clk     (clk_50),
-        .en      (pix_en),
-        .x       (video_x),
-        .y       (video_y),
-        .de      (video_de),
-        .hsync   (video_hsync),
-        .vsync   (video_vsync),
+    video_colorbars #(.H_ACTIVE(720), .V_ACTIVE(576)) u_video_colorbars (
+        .clk     (clk_sys),
+        .en      (1'b1),
+        .x       (bars_x),
+        .y       (bars_y),
+        .de      (bars_de),
+        .hsync   (bars_hsync),
+        .vsync   (bars_vsync),
         .r_q     (bars_rgb_q[23:16]),
         .g_q     (bars_rgb_q[15:8]),
         .b_q     (bars_rgb_q[7:0]),
@@ -278,18 +266,16 @@ module de25_nano_top #(
     reg        hdmi_hsync_q;
     reg        hdmi_vsync_q;
 
-    always @(posedge clk_50) begin
-        if (pix_en) begin
-            hdmi_rgb_q   <= sw_q[0] ? bars_rgb_q   : text_rgb_q;
-            hdmi_de_q    <= sw_q[0] ? bars_de_q    : text_de_q;
-            hdmi_hsync_q <= sw_q[0] ? bars_hsync_q : text_hsync_q;
-            hdmi_vsync_q <= sw_q[0] ? bars_vsync_q : text_vsync_q;
-        end
+    always @(posedge clk_sys) begin
+        hdmi_rgb_q   <= sw0_q ? bars_rgb_q   : c64_rgb_q;
+        hdmi_de_q    <= sw0_q ? bars_de_q    : c64_de_q;
+        hdmi_hsync_q <= sw0_q ? bars_hsync_q : c64_hsync_q;
+        hdmi_vsync_q <= sw0_q ? bars_vsync_q : c64_vsync_q;
     end
 
     // Belegung wie in Terasics Demo: D[23:16] Rot, D[15:8] Grün, D[7:0] Blau.
-    // 640x480 verlangt low-aktive Sync-Impulse.
-    assign HDMI_TX_CLK = pix_clk_q;
+    // 576p verlangt low-aktive Sync-Impulse.
+    assign HDMI_TX_CLK = clk_sys_180;
     assign HDMI_TX_D   = hdmi_rgb_q;
     assign HDMI_TX_DE  = hdmi_de_q;
     assign HDMI_TX_HS  = ~hdmi_hsync_q;
@@ -302,8 +288,8 @@ module de25_nano_top #(
     wire hdmi_ready_q;
     wire hdmi_nack_q;
 
-    hdmi_config u_hdmi_config (
-        .clk      (clk_50),
+    hdmi_config #(.CLKS_PER_QUARTER(I2C_QUARTER), .STARTUP_CLKS(STARTUP_CLKS)) u_hdmi_config (
+        .clk      (clk_sys),
         .rst      (rst),
         .int_n    (HDMI_TX_INT),
         .scl_oe_q (hdmi_scl_oe_q),
@@ -316,12 +302,11 @@ module de25_nano_top #(
     assign HDMI_I2C_SCL = ~hdmi_scl_oe_q;
     assign HDMI_I2C_SDA = hdmi_sda_oe_q ? 1'b0 : 1'bz;
 
-
     // --- LEDs ---------------------------------------------------------------
     // Interne Sicht: 1 = LED an. Nur der Herzschlag ist angeschlossen.
     // Zum Fehlersuchen bieten sich an: hdmi_ready_q, hdmi_nack_q,
     // key_fifo_full, typer_busy, loader_active, rst.
-    wire [7:0] led = {7'b0, heartbeat_50_q};
+    wire [7:0] led = {7'b0, heartbeat_q};
 
     assign LEDR = ~led;
 
