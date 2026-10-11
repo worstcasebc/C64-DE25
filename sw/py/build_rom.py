@@ -1,11 +1,14 @@
-"""Baut das ROM des Mini-Systems: .s -> .o -> .bin -> .hex.
+"""Baut die ROMs: .s -> .o -> .bin -> .hex.
 
 Aufruf (aus dem Projektverzeichnis):
-    python sw/py/build_rom.py            baut sw/asm/hello.s
-    python sw/py/build_rom.py name       baut sw/asm/name.s
+    python sw/py/build_rom.py            baut alle Programme aus TARGETS
+    python sw/py/build_rom.py name       baut nur sw/asm/name.s
 
-Ergebnis in sw/asm/build/: <name>.bin (Rohdaten), <name>.hex (ein Byte pro
-Zeile für $readmemh), <name>.map und <name>.lst zum Nachlesen.
+Ergebnis in sw/asm/build/: <name>.bin (Rohdaten), <name>.map und <name>.lst
+zum Nachlesen sowie je ROM eine Hex-Datei (ein Byte pro Zeile für $readmemh):
+    hello     -> hello.hex                                  (Mini-System)
+    banktest  -> banktest_basic.hex, banktest_char.hex,
+                 banktest_kernal.hex                        (C64-Speicherkarte)
 """
 import shutil
 import subprocess
@@ -16,7 +19,13 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 ASM = ROOT / "sw" / "asm"
 BUILD = ASM / "build"
 CC65_BIN = ROOT / "tools" / "cc65" / "bin"  # lokaler cc65-Snapshot
-ROM_SIZE = 0x2000
+
+# Programm -> (Linker-Konfiguration, ROMs in der Reihenfolge der .bin-Datei
+# als (Namenszusatz, Größe))
+TARGETS = {
+    "hello": ("mini.cfg", [("", 0x2000)]),
+    "banktest": ("c64.cfg", [("_basic", 0x2000), ("_char", 0x1000), ("_kernal", 0x2000)]),
+}
 
 
 def find_tool(name: str) -> str:
@@ -30,7 +39,11 @@ def find_tool(name: str) -> str:
     sys.exit(f"{name} nicht gefunden (weder im PATH noch unter {CC65_BIN})")
 
 
-def build(name: str) -> Path:
+def build(name: str) -> list[Path]:
+    if name not in TARGETS:
+        sys.exit(f"Unbekanntes Programm '{name}' (bekannt: {', '.join(TARGETS)})")
+    cfg, roms = TARGETS[name]
+
     BUILD.mkdir(parents=True, exist_ok=True)
     obj, binary = BUILD / f"{name}.o", BUILD / f"{name}.bin"
 
@@ -40,23 +53,29 @@ def build(name: str) -> Path:
         check=True,
     )
     subprocess.run(
-        [find_tool("ld65"), "-C", str(ASM / "mini.cfg"), "-m", str(BUILD / f"{name}.map"),
+        [find_tool("ld65"), "-C", str(ASM / cfg), "-m", str(BUILD / f"{name}.map"),
          "-o", str(binary), str(obj)],
         check=True,
     )
 
     data = binary.read_bytes()
-    if len(data) != ROM_SIZE:
-        sys.exit(f"{binary.name} hat {len(data)} Bytes, erwartet {ROM_SIZE}")
+    total = sum(size for _, size in roms)
+    if len(data) != total:
+        sys.exit(f"{binary.name} hat {len(data)} Bytes, erwartet {total}")
 
-    hex_file = BUILD / f"{name}.hex"
-    hex_file.write_text("".join(f"{b:02X}\n" for b in data))
-    return hex_file
+    hex_files, offset = [], 0
+    for suffix, size in roms:
+        hex_file = BUILD / f"{name}{suffix}.hex"
+        hex_file.write_text("".join(f"{b:02X}\n" for b in data[offset:offset + size]))
+        hex_files.append(hex_file)
+        offset += size
+    return hex_files
 
 
 if __name__ == "__main__":
     try:
-        out = build(sys.argv[1] if len(sys.argv) > 1 else "hello")
+        outs = [f for name in (sys.argv[1:] or TARGETS) for f in build(name)]
     except subprocess.CalledProcessError as err:
         sys.exit(err.returncode)
-    print(f"ROM gebaut: {out.relative_to(ROOT)}")
+    for out in outs:
+        print(f"ROM gebaut: {out.relative_to(ROOT)}")
