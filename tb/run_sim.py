@@ -33,9 +33,12 @@ def run_tb(name: str) -> bool:
     iverilog = find_tool("iverilog", ICARUS_DIR / "bin" / "iverilog.exe")
     vvp = find_tool("vvp", ICARUS_DIR / "bin" / "vvp.exe")
     rtl = [str(p.relative_to(ROOT)) for p in sorted((ROOT / "rtl").rglob("*.v"))]
+    # Hilfsmodule für Testbenches: alle tb/*.v, die keine Testbench sind.
+    helpers = [f"tb/{p.name}" for p in sorted((ROOT / "tb").glob("*.v")) if not p.name.startswith("tb_")]
     out = BUILD / f"{name}.vvp"
 
-    compile_cmd = [iverilog, "-g2005", "-Wall", "-Wno-timescale", "-s", name, "-o", str(out), f"tb/{name}.v", *rtl]
+    compile_cmd = [iverilog, "-g2005", "-Wall", "-Wno-timescale", "-s", name, "-o", str(out),
+                   f"tb/{name}.v", *helpers, *rtl]
     comp = subprocess.run(compile_cmd, cwd=ROOT, capture_output=True, text=True)
     if comp.returncode != 0 or comp.stderr.strip():
         print(comp.stdout + comp.stderr)
@@ -55,7 +58,7 @@ def main() -> int:
     args = parser.parse_args()
 
     BUILD.mkdir(parents=True, exist_ok=True)
-    # Das ROM-Abbild wird von tb_soc_mini (und später Quartus) gelesen.
+    # Die ROM-Abbilder werden von tb_soc_mini/tb_soc_c64 (und Quartus) gelesen.
     if subprocess.run([sys.executable, str(ROOT / "sw" / "py" / "build_rom.py")], cwd=ROOT).returncode != 0:
         return 1
     names = args.testbench or [p.stem for p in sorted((ROOT / "tb").glob("tb_*.v"))]
