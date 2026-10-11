@@ -5,7 +5,10 @@
 //         (RGB, HS, VS, DE) als HDMI aus. Dieses Modul schreibt die Register
 //         der Reihe nach und wiederholt einen Zugriff, bis der Baustein ihn
 //         bestätigt. Die Registerwerte stammen aus Terasics Demo HDMI_TX
-//         (I2C_HDMI_Config.v) für das DE25-Nano.
+//         (I2C_HDMI_Config.v) für das DE25-Nano — mit einer Ergänzung:
+//         Register $0A = $00 sagt dem Baustein, dass der Tontakt MCLK das
+//         128-Fache der Abtastrate ist (Terasic liefert das 256-Fache, die
+//         Voreinstellung). Der Ton kommt als I2S mit 16 Bit; siehe i2s_tx.
 //         Zieht der Baustein seine Interrupt-Leitung auf 0 (z. B. Monitor
 //         neu eingesteckt — dabei fällt er in den Schlafmodus zurück), wird
 //         die Konfiguration wiederholt.
@@ -34,7 +37,7 @@ module hdmi_config #(
 );
 
     localparam [7:0] DEV_ADDR = 8'h72;
-    localparam       N_REGS   = 33;
+    localparam       N_REGS   = 34;
     localparam       WAIT_W   = (STARTUP_CLKS > 1) ? $clog2(STARTUP_CLKS) : 1;
 
     // {Registeradresse, Wert}
@@ -44,35 +47,36 @@ module hdmi_config #(
             6'd1:    reg_entry = 16'h0100;  // Audio: N = 6144 (48 kHz)
             6'd2:    reg_entry = 16'h0218;
             6'd3:    reg_entry = 16'h0300;
-            6'd4:    reg_entry = 16'h0B2E;  // Audio: MCLK aktiv
-            6'd5:    reg_entry = 16'h0CBC;  // Audio: I2S
-            6'd6:    reg_entry = 16'h1472;  // Audio: 16 Bit
-            6'd7:    reg_entry = 16'h1520;  // Eingang RGB 4:4:4, getrennte Syncs
-            6'd8:    reg_entry = 16'h1630;  // Ausgang 4:4:4, 24 Bit
-            6'd9:    reg_entry = 16'h1846;  // keine Farbraumumrechnung
-            6'd10:   reg_entry = 16'h4080;  // General-Control-Paket ein
-            6'd11:   reg_entry = 16'h4110;  // Schlafmodus aus
-            6'd12:   reg_entry = 16'h49A8;  // Dither-Einstellung
-            6'd13:   reg_entry = 16'h5510;  // AVI-Infoframe: RGB
-            6'd14:   reg_entry = 16'h5608;  // AVI-Infoframe: Seitenverhältnis
-            6'd15:   reg_entry = 16'h96F6;  // Interrupts quittieren
-            6'd16:   reg_entry = 16'h7307;  // Audio: Kanalzahl
-            6'd17:   reg_entry = 16'h761F;  // Audio: Lautsprecherzuordnung
-            6'd18:   reg_entry = 16'h9803;  // ab hier Pflichtwerte laut Hersteller
-            6'd19:   reg_entry = 16'h9902;
-            6'd20:   reg_entry = 16'h9AE0;
-            6'd21:   reg_entry = 16'h9C30;
-            6'd22:   reg_entry = 16'h9D61;
-            6'd23:   reg_entry = 16'hA2A4;
-            6'd24:   reg_entry = 16'hA3A4;
-            6'd25:   reg_entry = 16'hA504;
-            6'd26:   reg_entry = 16'hAB40;
-            6'd27:   reg_entry = 16'hAF16;  // HDMI-Modus (statt DVI)
-            6'd28:   reg_entry = 16'hBA60;  // keine Taktverzögerung
-            6'd29:   reg_entry = 16'hD1FF;
-            6'd30:   reg_entry = 16'hDE10;
-            6'd31:   reg_entry = 16'hE460;
-            6'd32:   reg_entry = 16'hFA7D;
+            6'd4:    reg_entry = 16'h0A00;  // Audio: I2S, MCLK = 128 x Abtastrate
+            6'd5:    reg_entry = 16'h0B2E;  // Audio: MCLK aktiv
+            6'd6:    reg_entry = 16'h0CBC;  // Audio: I2S
+            6'd7:    reg_entry = 16'h1472;  // Audio: 16 Bit
+            6'd8:    reg_entry = 16'h1520;  // Eingang RGB 4:4:4, getrennte Syncs
+            6'd9:    reg_entry = 16'h1630;  // Ausgang 4:4:4, 24 Bit
+            6'd10:   reg_entry = 16'h1846;  // keine Farbraumumrechnung
+            6'd11:   reg_entry = 16'h4080;  // General-Control-Paket ein
+            6'd12:   reg_entry = 16'h4110;  // Schlafmodus aus
+            6'd13:   reg_entry = 16'h49A8;  // Dither-Einstellung
+            6'd14:   reg_entry = 16'h5510;  // AVI-Infoframe: RGB
+            6'd15:   reg_entry = 16'h5608;  // AVI-Infoframe: Seitenverhältnis
+            6'd16:   reg_entry = 16'h96F6;  // Interrupts quittieren
+            6'd17:   reg_entry = 16'h7307;  // Audio: Kanalzahl
+            6'd18:   reg_entry = 16'h761F;  // Audio: Lautsprecherzuordnung
+            6'd19:   reg_entry = 16'h9803;  // ab hier Pflichtwerte laut Hersteller
+            6'd20:   reg_entry = 16'h9902;
+            6'd21:   reg_entry = 16'h9AE0;
+            6'd22:   reg_entry = 16'h9C30;
+            6'd23:   reg_entry = 16'h9D61;
+            6'd24:   reg_entry = 16'hA2A4;
+            6'd25:   reg_entry = 16'hA3A4;
+            6'd26:   reg_entry = 16'hA504;
+            6'd27:   reg_entry = 16'hAB40;
+            6'd28:   reg_entry = 16'hAF16;  // HDMI-Modus (statt DVI)
+            6'd29:   reg_entry = 16'hBA60;  // keine Taktverzögerung
+            6'd30:   reg_entry = 16'hD1FF;
+            6'd31:   reg_entry = 16'hDE10;
+            6'd32:   reg_entry = 16'hE460;
+            6'd33:   reg_entry = 16'hFA7D;
             default: reg_entry = 16'h9803;
         endcase
     endfunction

@@ -2,7 +2,7 @@
 //
 // Am Bus hängt das Modell i2c_slave_model (Adresse $72).
 // 1. Während der Wartezeit nach Reset passiert auf dem Bus nichts.
-// 2. Danach werden genau 33 Register geschrieben, erst dann ist ready = 1.
+// 2. Danach werden genau 34 Register geschrieben, erst dann ist ready = 1.
 //    Stichproben: Schlafmodus aus ($41), HDMI-Modus ($AF), letztes ($FA).
 // 3. Antwortet der Baustein nicht, wird wiederholt, bis er antwortet.
 // 4. Ein Interrupt (int_n = 0) löst die Konfiguration erneut aus.
@@ -13,7 +13,7 @@
 module tb_hdmi_config;
 
     localparam STARTUP_CLKS = 200;
-    localparam N_REGS       = 33;
+    localparam N_REGS       = 34;
 
     reg         clk        = 1'b0;
     reg         rst        = 1'b1;
