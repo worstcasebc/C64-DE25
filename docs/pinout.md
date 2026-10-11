@@ -69,6 +69,41 @@ wiederholt mit „Synchronization failed“.
 | FPGA_UART_TX | PIN_CJ1  | Ausgang         | 3.3-V LVCMOS |
 | FPGA_UART_RX | PIN_BR19 | Eingang (noch unbenutzt) | 3.3-V LVCMOS |
 
+## HDMI-Sender
+
+Quelle: `golden_top.qsf` und das Demo `Demonstration/FPGA/HDMI_TX`. Das FPGA
+erzeugt kein HDMI-Signal selbst, sondern liefert einem Sender-Baustein auf dem
+Board paralleles Video: 24 Bit RGB, HS, VS, DE und den Pixeltakt. Der Baustein
+muss nach dem Einschalten über I2C konfiguriert werden (Schreibadresse `0x72`,
+Registerliste im Demo in `V_HDMI/I2C_HDMI_Config.v`). Farbzuordnung im Demo:
+`D[23:16]` = Rot, `D[15:8]` = Grün, `D[7:0]` = Blau.
+
+| Signal       | Pin      | Richtung (FPGA) | I/O-Standard |
+|--------------|----------|-----------------|--------------|
+| HDMI_TX_CLK  | PIN_DJ24 | Ausgang         | 1.1-V        |
+| HDMI_TX_DE   | PIN_CJ2  | Ausgang         | 3.3-V LVCMOS |
+| HDMI_TX_HS   | PIN_BR11 | Ausgang         | 3.3-V LVCMOS |
+| HDMI_TX_VS   | PIN_BR14 | Ausgang         | 3.3-V LVCMOS |
+| HDMI_I2C_SCL | PIN_BT1  | bidirektional   | 3.3-V LVCMOS |
+| HDMI_I2C_SDA | PIN_BW2  | bidirektional   | 3.3-V LVCMOS |
+| HDMI_TX_INT  | PIN_CF2  | Eingang         | 3.3-V LVCMOS |
+
+Datenleitungen, alle 3.3-V LVCMOS:
+
+| Signal        | Pin      | Signal         | Pin      | Signal         | Pin      |
+|---------------|----------|----------------|----------|----------------|----------|
+| HDMI_TX_D[0]  | PIN_AV19 | HDMI_TX_D[8]   | PIN_BH11 | HDMI_TX_D[16]  | PIN_BH16 |
+| HDMI_TX_D[1]  | PIN_AT11 | HDMI_TX_D[9]   | PIN_BE14 | HDMI_TX_D[17]  | PIN_DA1  |
+| HDMI_TX_D[2]  | PIN_BE11 | HDMI_TX_D[10]  | PIN_BE19 | HDMI_TX_D[18]  | PIN_BH19 |
+| HDMI_TX_D[3]  | PIN_AV14 | HDMI_TX_D[11]  | PIN_BH14 | HDMI_TX_D[19]  | PIN_CP2  |
+| HDMI_TX_D[4]  | PIN_AT19 | HDMI_TX_D[12]  | PIN_BV6  | HDMI_TX_D[20]  | PIN_CM1  |
+| HDMI_TX_D[5]  | PIN_AT14 | HDMI_TX_D[13]  | PIN_BJ23 | HDMI_TX_D[21]  | PIN_DA2  |
+| HDMI_TX_D[6]  | PIN_AV16 | HDMI_TX_D[14]  | PIN_BV4  | HDMI_TX_D[22]  | PIN_CP1  |
+| HDMI_TX_D[7]  | PIN_AV11 | HDMI_TX_D[15]  | PIN_BU23 | HDMI_TX_D[23]  | PIN_CU2  |
+
+Audio (erst ab Meilenstein 6 relevant, alle 3.3-V LVCMOS): HDMI_MCLK PIN_CF1,
+HDMI_SCLK PIN_BW1, HDMI_LRCLK PIN_BR6, HDMI_I2S PIN_CB2.
+
 ## Hinweis zum I/O-Standard
 
 Das Handbuch nennt nur „1.1V“. Terasics `golden_top.qsf` schreibt `"1.1-V"`;
