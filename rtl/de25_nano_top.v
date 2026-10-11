@@ -216,8 +216,8 @@ module de25_nano_top #(
         .vsync_q (c64_vsync_q)
     );
 
-    // Testbild im selben Raster (1008 x 624, sichtbar 720 x 576), wie es in
-    // der Monitortest gezeigt hat (siehe docs/pinout.md, Bildformat).
+    // Testbild im selben Raster (1008 x 624, sichtbar 720 x 576), das der
+    // Monitortest bestätigt hat (siehe docs/pinout.md, Bildformat).
     wire [11:0] bars_x;
     wire [11:0] bars_y;
     wire        bars_de;

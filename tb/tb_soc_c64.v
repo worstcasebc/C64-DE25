@@ -4,10 +4,11 @@
 // Lässt die Test-ROMs (sw/asm/banktest.s) laufen und prüft, dass am UART-Pin
 // genau der erwartete Text erscheint. Das Programm schaltet das Banking um
 // und meldet je Bereich OK oder den falsch gelesenen Wert; zuletzt zählt es
-// Timer-Interrupts der CIA. Damit sind CPU, CPU-Port, Address-Decoder, RAM
-// unter den ROMs, alle drei ROMs und der IRQ-Weg gemeinsam getestet — jetzt
-// mit dem echten VIC-II am Bus, der die CPU bei eingeschaltetem Bildschirm
-// regelmäßig anhält. Das Bild selbst prüft tb_c64_video.
+// Timer-Interrupts beider CIAs (IRQ und NMI). Damit sind CPU, CPU-Port,
+// Address-Decoder, RAM unter den ROMs, alle drei ROMs und beide
+// Interrupt-Wege gemeinsam getestet — mit dem echten VIC-II am Bus, der die
+// CPU bei eingeschaltetem Bildschirm regelmäßig anhält. Das Bild selbst
+// prüft tb_c64_video.
 //
 // Der Rechner läuft mit PIX_DIV = 1 (8 statt 32 Systemtakte pro CPU-Takt),
 // das spart Rechenzeit.
@@ -23,7 +24,7 @@
 module tb_soc_c64;
 
     localparam CLKS_PER_BIT = 4;
-    localparam LEN          = 124;  // muss zur Länge von EXPECTED passen
+    localparam LEN          = 139;  // muss zur Länge von EXPECTED passen
     localparam [8*LEN-1:0] EXPECTED = {
         "C64-Speicherkarte\015\n",
         "BASIC-ROM  OK\015\n",
@@ -32,7 +33,8 @@ module tb_soc_c64;
         "RAM $D000  OK\015\n",
         "RAM $E000  OK\015\n",
         "CPU-PORT   OK\015\n",
-        "CIA-IRQ    OK\015\n"
+        "CIA-IRQ    OK\015\n",
+        "CIA-NMI    OK\015\n"
     };
 
     reg         clk = 1'b0;

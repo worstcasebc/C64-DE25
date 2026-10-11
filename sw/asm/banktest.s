@@ -16,6 +16,7 @@
 ;   RAM $E000  OK
 ;   CPU-PORT   OK
 ;   CIA-IRQ    OK
+;   CIA-NMI    OK
 ; Im Fehlerfall steht statt OK der gelesene Wert: FEHLER $xx.
 ; Zum Schluss füllt es den Bildschirmspeicher: Titel in Zeile 0, ab Zeile 2
 ; alle 256 Zeichen in der Reihenfolge ihrer Codes, sonst Leerzeichen.
@@ -37,6 +38,10 @@ CIA_TALO = $DC04        ; CIA 1: Timer A, unteres Byte
 CIA_TAHI = $DC05        ; CIA 1: Timer A, oberes Byte
 CIA_ICR  = $DC0D        ; CIA 1: Interrupts melden/freigeben
 CIA_CRA  = $DC0E        ; CIA 1: Timer A steuern
+CIA2_TBLO = $DD06       ; CIA 2: Timer B, unteres Byte
+CIA2_TBHI = $DD07       ; CIA 2: Timer B, oberes Byte
+CIA2_ICR  = $DD0D       ; CIA 2: ihre Interrupts gehen an den NMI
+CIA2_CRB  = $DD0F       ; CIA 2: Timer B steuern
 
 .zeropage
 got:        .res 1
@@ -44,6 +49,7 @@ expected:   .res 1
 got_d000:   .res 1
 got_e000:   .res 1
 irq_count:  .res 1
+nmi_count:  .res 1
 
 .segment "BASIC"
         .byte "B"       ; $A000
@@ -169,6 +175,43 @@ reset:
 @counted:
         ldy #3
         ldx #(t_irq - text)
+        jsr report
+
+        ; NMI: Timer B der zweiten CIA läuft alle 101 Schritte ab. Der NMI
+        ; lässt sich nicht sperren (sei wirkt nicht); die Routine nmi zählt
+        ; mit. Drei müssen kommen.
+        lda #0
+        sta nmi_count
+        lda #100
+        sta CIA2_TBLO
+        lda #0
+        sta CIA2_TBHI
+        lda #$82        ; Unterlauf von Timer B darf den Interrupt auslösen
+        sta CIA2_ICR
+        lda #$11        ; Startwert laden und fortlaufend starten
+        sta CIA2_CRB
+        ldx #0
+        ldy #0
+@wait_nmi:
+        lda nmi_count
+        cmp #3
+        bcs @enough_nmi
+        dex
+        bne @wait_nmi
+        dey
+        bne @wait_nmi   ; nach 65536 Runden aufgeben
+@enough_nmi:
+        lda #$7F        ; alle Interrupts der zweiten CIA sperren
+        sta CIA2_ICR
+        lda #0          ; Timer anhalten
+        sta CIA2_CRB
+        lda nmi_count
+        cmp #3
+        bcc @counted_nmi
+        lda #3
+@counted_nmi:
+        ldy #3
+        ldx #(t_nmi - text)
         jsr report
 
         ; VIC-II einstellen wie das KERNAL: Textbildschirm an, 25 Zeilen,
@@ -311,7 +354,14 @@ irq:
         pla
         rti
 
+; nmi — Interrupt der zweiten CIA: quittieren und mitzählen. Der NMI
+; reagiert nur auf den Wechsel der Leitung; ohne das Lesen von ICR bliebe
+; sie stehen, und es käme kein weiterer.
 nmi:
+        pha
+        lda CIA2_ICR
+        inc nmi_count
+        pla
         rti
 
 .rodata
@@ -325,6 +375,7 @@ t_ram_d:    .byte "RAM $D000  ", 0
 t_ram_e:    .byte "RAM $E000  ", 0
 t_port:     .byte "CPU-PORT   ", 0
 t_irq:      .byte "CIA-IRQ    ", 0
+t_nmi:      .byte "CIA-NMI    ", 0
 t_fail:     .byte "FEHLER $", 0
 t_ok:       .byte "OK"  ; läuft in t_eol weiter
 t_eol:      .byte $0D, $0A, 0
