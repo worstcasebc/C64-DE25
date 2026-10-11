@@ -1,7 +1,11 @@
 ; banktest.s — Test-ROMs für die C64-Speicherkarte (Meilenstein 3).
 ;
-; Erzeugt alle drei ROMs: BASIC und Char-ROM enthalten nur ein Kennzeichen
-; am Anfang ('B' bzw. 'C'), das KERNAL-ROM enthält dieses Testprogramm.
+; Erzeugt alle drei ROMs: Das BASIC-ROM enthält nur das Kennzeichen 'B' am
+; Anfang. Das Char-ROM beginnt mit dem Kennzeichen 'C'; danach besteht jedes
+; Zeichen aus acht gleichen Zeilen mit dem eigenen Zeichencode als Muster —
+; auf dem Bildschirm zeigt jedes Zeichen so seinen Code als Streifen, und
+; die Testbench kann jedes Pixel nachrechnen. Das KERNAL-ROM enthält dieses
+; Testprogramm.
 ; Es schaltet das Banking über $01 um und meldet per UART, ob an derselben
 ; Adresse einmal ROM und einmal RAM erscheint:
 ;   C64-Speicherkarte
@@ -12,11 +16,14 @@
 ;   RAM $E000  OK
 ;   CPU-PORT   OK
 ; Im Fehlerfall steht statt OK der gelesene Wert: FEHLER $xx.
+; Zum Schluss füllt es den Bildschirmspeicher: Titel in Zeile 0, ab Zeile 2
+; alle 256 Zeichen in der Reihenfolge ihrer Codes, sonst Leerzeichen.
 
 PORT_DDR = $00          ; Richtungsregister des CPU-Ports
 PORT     = $01          ; Bit 0 LORAM, Bit 1 HIRAM, Bit 2 CHAREN
 UART     = $DE00        ; schreiben: Byte senden; lesen: Bit 7 = Sender frei
 RAMCODE  = $0200        ; hierhin wird ramcode kopiert
+SCREEN   = $0400        ; Bildschirmspeicher, 40 x 25 Zeichen
 
 .zeropage
 got:        .res 1
@@ -28,7 +35,12 @@ got_e000:   .res 1
         .byte "B"       ; $A000
 
 .segment "CHARROM"
-        .byte "C"       ; $D000
+        .byte "C", 0, 0, 0, 0, 0, 0, 0  ; $D000: Zeichen 0
+        .repeat 255, i                  ; Zeichen 1..255
+            .repeat 8
+                .byte i + 1
+            .endrepeat
+        .endrepeat
 
 .code
 
@@ -106,6 +118,39 @@ reset:
         ldy #$37
         ldx #(t_port - text)
         jsr report
+
+        ; Bildschirm löschen: 1000 Zeichen in vier Stücken zu je 256 (das
+        ; letzte überlappt). Leerzeichen hat den Bildschirmcode $20.
+        ldx #0
+        lda #$20
+@clear:
+        sta SCREEN,x
+        sta SCREEN + $100,x
+        sta SCREEN + $200,x
+        sta SCREEN + $2E8,x
+        inx
+        bne @clear
+
+        ; Titel in Zeile 0. Bildschirmcodes sind kein ASCII: A-Z haben die
+        ; Codes 1-26; Ziffern und Satzzeichen bleiben gleich. "and #$3F"
+        ; macht aus ASCII-Großbuchstaben den Bildschirmcode.
+        ldx #0
+@title:
+        lda t_screen,x
+        beq @charset
+        and #$3F
+        sta SCREEN,x
+        inx
+        bne @title
+
+        ; Alle 256 Zeichen ab Zeile 2.
+@charset:
+        ldx #0
+@codes:
+        txa
+        sta SCREEN + 80,x
+        inx
+        bne @codes
 
 done:
         jmp done
@@ -195,6 +240,7 @@ t_fail:     .byte "FEHLER $", 0
 t_ok:       .byte "OK"  ; läuft in t_eol weiter
 t_eol:      .byte $0D, $0A, 0
 hexdigits:  .byte "0123456789ABCDEF"
+t_screen:   .byte "DE25-NANO C64 TEXTMODUS", 0
 
 .segment "VECTORS"
         .word irq_nmi   ; $FFFA NMI
