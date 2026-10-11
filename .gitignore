@@ -33,3 +33,6 @@ sw/asm/build/
 
 # Fehlerbericht, den Quartus bei internen Fehlern schreibt
 quartus/serv_req_info.txt
+
+# Testprogramme aus fremden Veröffentlichungen (nicht einchecken)
+sw/prg/
