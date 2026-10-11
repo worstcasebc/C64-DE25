@@ -13,6 +13,9 @@ set_global_assignment -name VERILOG_FILE ../rtl/io/sync_2ff.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/uart_tx.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/i2c_write.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/cia.v
+set_global_assignment -name VERILOG_FILE ../rtl/io/uart_rx.v
+set_global_assignment -name VERILOG_FILE ../rtl/io/key_matrix.v
+set_global_assignment -name VERILOG_FILE ../rtl/io/ascii_key_typer.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/video_timing.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/video_colorbars.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/video_text.v
@@ -28,6 +31,7 @@ set_global_assignment -name VERILOG_FILE ../rtl/mem/ram_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/rom_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/ram_dp_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/rom_dp_sync.v
+set_global_assignment -name VERILOG_FILE ../rtl/mem/fifo_sync.v
 set_global_assignment -name SDC_FILE de25_nano_c64.sdc
 
 # --- Takt (Tabelle 3-6) ----------------------------------------------------
@@ -70,6 +74,8 @@ set_instance_assignment -name IO_STANDARD "1.1 V" -to LEDR[7]
 # --- FPGA-UART über den Onboard-FTDI (Terasic golden_top.qsf) ----------------
 set_location_assignment PIN_CJ1 -to FPGA_UART_TX
 set_instance_assignment -name IO_STANDARD "3.3-V LVCMOS" -to FPGA_UART_TX
+set_location_assignment PIN_BR19 -to FPGA_UART_RX
+set_instance_assignment -name IO_STANDARD "3.3-V LVCMOS" -to FPGA_UART_RX -entity de25_nano_top
 
 # --- HDMI-Sender ADV7513 (Terasic golden_top.qsf) ----------------------------
 set_location_assignment PIN_DJ24 -to HDMI_TX_CLK

@@ -22,6 +22,9 @@ set_output_delay -clock clk_50 0 [get_ports {LEDR[*]}]
 set_false_path   -to [get_ports FPGA_UART_TX]
 set_output_delay -clock clk_50 0 [get_ports FPGA_UART_TX]
 
+# Der Empfang ist ebenfalls asynchron und läuft über sync_2ff.
+set_false_path -from [get_ports FPGA_UART_RX]
+
 # HDMI-Video: Daten und Takt kommen aus derselben Domäne. Die Daten wechseln
 # mit der fallenden Flanke von HDMI_TX_CLK, der Sender übernimmt sie mit der
 # steigenden — also 20 ns nach dem Wechsel und 20 ns vor dem nächsten. Gegen

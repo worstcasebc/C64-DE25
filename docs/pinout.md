@@ -67,7 +67,7 @@ wiederholt mit „Synchronization failed“.
 | Signal       | Pin      | Richtung (FPGA) | I/O-Standard |
 |--------------|----------|-----------------|--------------|
 | FPGA_UART_TX | PIN_CJ1  | Ausgang         | 3.3-V LVCMOS |
-| FPGA_UART_RX | PIN_BR19 | Eingang (noch unbenutzt) | 3.3-V LVCMOS |
+| FPGA_UART_RX | PIN_BR19 | Eingang (Tastatur-Ersatz) | 3.3-V LVCMOS |
 
 ## HDMI-Sender
 

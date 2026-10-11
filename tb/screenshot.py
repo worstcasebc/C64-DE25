@@ -4,6 +4,7 @@ Aufruf (aus dem Projektverzeichnis):
     python tb/screenshot.py              Original-ROMs aus roms/ (BASIC-Start)
     python tb/screenshot.py --roms test  Test-ROMs (sw/asm/banktest.s)
     python tb/screenshot.py --wait 500000 -o bild.png
+    python tb/screenshot.py --type "PRINT3+4"   nach dem Start Text + Enter tippen
 
 Lässt tb_c64_video laufen: Der Rechner arbeitet --wait Takte lang (ein Takt =
 ein CPU-Schritt), dann wird ein Bild aufgezeichnet. Das Original-KERNAL
@@ -51,6 +52,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--roms", choices=["c64", "test"], default="c64", help="ROM-Satz (Default: c64)")
     parser.add_argument("--wait", type=int, help="Takte vor der Aufnahme")
+    parser.add_argument("--type", dest="text", help="Text, der nach der Wartezeit getippt wird (ohne Leerzeichen)")
     parser.add_argument("-o", "--output", type=Path, default=BUILD / "screenshot.png")
     args = parser.parse_args()
 
@@ -67,6 +69,9 @@ def main() -> int:
         plusargs += [f"+wait={args.wait or 3_000_000}", "+nocheck"]
     else:
         plusargs = [f"+wait={args.wait or 100_000}"]
+
+    if args.text:
+        plusargs.append(f"+type={args.text}")
 
     if not run_sim.run_tb("tb_c64_video", tuple(plusargs)):
         return 1

@@ -21,13 +21,14 @@
 //         Zeichens. Die oberen vier Bits lesen hier als 1 (im echten C64
 //         sind sie zufällig).
 //         $DC00-$DCFF: CIA 1, siehe cia. Ihr Interrupt geht an den IRQ der
-//         CPU. An den Ports hängt später die Tastatur; bis dahin liegen
-//         alle Leitungen auf 1 ("keine Taste gedrückt").
+//         CPU. Zwischen Port A und Port B hängt die Tastatur (key_matrix).
 //         Restliches I/O-Fenster: liest $FF.
 // Ports:  uart_txd — serielle Ausgabe, UART_CLKS_PER_BIT Takte pro Bit.
 //         vid_* — Lese-Anschluss für das Video: Adresse anlegen, Daten
 //         erscheinen einen Takt mit vid_en = 1 später.
 //         border_color/bg_color — Farbnummern aus $D020/$D021.
+//         keys — gedrückte Tasten, synchron zu clk; Nummerierung siehe
+//         key_matrix.
 
 `default_nettype none
 
@@ -41,6 +42,7 @@ module soc_c64 #(
     input  wire        clk,
     input  wire        rst,
     output wire        uart_txd,
+    input  wire [63:0] keys,
     input  wire        vid_en,
     input  wire [15:0] vid_ram_addr,
     output wire [7:0]  vid_ram_dout,
@@ -211,6 +213,13 @@ module soc_c64 #(
     wire [7:0] cia1_dout;
     wire [7:0] cia1_pa_out;
     wire [7:0] cia1_pb_out;
+    wire [7:0] cia1_pb_in;
+
+    key_matrix u_key_matrix (
+        .keys (keys),
+        .pa   (cia1_pa_out),
+        .pb   (cia1_pb_in)
+    );
 
     cia u_cia1 (
         .clk    (clk),
@@ -225,11 +234,11 @@ module soc_c64 #(
         .pa_out (cia1_pa_out),
         .pb_out (cia1_pb_out),
         .pa_in  (8'hFF),
-        .pb_in  (8'hFF)
+        .pb_in  (cia1_pb_in)
     );
 
-    // Die Port-Ausgänge werden erst mit der Tastatur gebraucht.
-    wire unused_cia1 = &{cia1_pa_out, cia1_pb_out};
+    // Port B wird nur gelesen; was die CIA dort ausgibt, braucht niemand.
+    wire unused_cia1 = &cia1_pb_out;
 
     // --- UART-Register ------------------------------------------------------
     wire uart_ready;

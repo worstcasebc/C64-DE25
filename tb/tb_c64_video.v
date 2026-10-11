@@ -15,6 +15,12 @@
 // ROMs nutzen (siehe tb/screenshot.py):
 //   +basic=<hex> +char=<hex> +kernal=<hex>   ROM-Inhalte ersetzen
 //   +wait=<Takte>                            Wartezeit vor der Aufnahme
+//   +type=<Text>                             danach Text und Enter auf
+//                                            einmal in die Warteschlange
+//                                            legen und tippen lassen, dann
+//                                            +after=<Takte> warten.
+//                                            Im Text steht | für Enter und
+//                                            ~ für Esc (RUN/STOP).
 //   +nocheck                                 Prüfungen 1-3 überspringen
 
 `timescale 1ns / 1ps
@@ -50,6 +56,14 @@ module tb_c64_video;
     wire        hsync_out;
     wire        vsync_out;
     wire        uart_txd;
+    wire [63:0] keys;
+    wire        typer_busy;
+    wire        fifo_empty;
+    wire        fifo_full;
+    wire [7:0]  fifo_data;
+    wire        fifo_rd;
+    reg  [7:0]  type_data  = 8'h00;
+    reg         type_valid = 1'b0;
 
     integer errors = 0;
 
@@ -57,6 +71,7 @@ module tb_c64_video;
         .clk            (clk),
         .rst            (rst),
         .uart_txd       (uart_txd),
+        .keys           (keys),
         .vid_en         (pix_en),
         .vid_ram_addr   (vid_ram_addr),
         .vid_ram_dout   (vid_ram_dout),
@@ -66,6 +81,29 @@ module tb_c64_video;
         .vid_char_dout  (vid_char_dout),
         .border_color   (border_color),
         .bg_color       (bg_color)
+    );
+
+    // Tastendauer passend zur Simulation: Die CPU läuft hier in jedem Takt,
+    // das KERNAL fragt die Tastatur also etwa alle 17000 Takte ab.
+    fifo_sync #(.ADDR_W(8)) u_key_fifo (
+        .clk    (clk),
+        .rst    (rst),
+        .wr_en  (type_valid),
+        .din    (type_data),
+        .full   (fifo_full),
+        .rd_en  (fifo_rd),
+        .dout_q (fifo_data),
+        .empty  (fifo_empty)
+    );
+
+    ascii_key_typer #(.PRESS_CLKS(40_000), .RELEASE_CLKS(40_000)) u_typer (
+        .clk        (clk),
+        .rst        (rst),
+        .fifo_empty (fifo_empty),
+        .fifo_data  (fifo_data),
+        .fifo_rd    (fifo_rd),
+        .busy       (typer_busy),
+        .keys       (keys)
     );
 
     video_timing u_timing (
@@ -164,8 +202,19 @@ module tb_c64_video;
 
     // --- Ablauf -------------------------------------------------------------
     reg [8*256-1:0] rom_file;
+    reg [8*128-1:0] type_text;
     integer         wait_clks;
-    integer         code, line, pos;
+    integer         after_clks;
+    integer         code, line, pos, n;
+
+    task type_char(input [7:0] ch);     // ein Zeichen in die Warteschlange
+        begin
+            @(negedge clk);
+            type_data = ch; type_valid = 1'b1;
+            @(negedge clk);
+            type_valid = 1'b0;
+        end
+    endtask
 
     initial begin
         if (!$value$plusargs("wait=%d", wait_clks)) wait_clks = 100_000;
@@ -179,8 +228,23 @@ module tb_c64_video;
         repeat (5) @(posedge clk);
         @(negedge clk) rst = 1'b0;
 
-        // Programm laufen lassen, dann ein ganzes Bild aufnehmen
+        // Programm laufen lassen
         repeat (wait_clks) @(posedge clk);
+
+        // Auf Wunsch tippen: Text steht rechtsbündig in type_text, davor Nullen
+        if ($value$plusargs("type=%s", type_text)) begin
+            if (!$value$plusargs("after=%d", after_clks)) after_clks = 400_000;
+            for (n = 127; n >= 0; n = n - 1)
+                if (type_text[8*n +: 8] != 8'h00)
+                    type_char(type_text[8*n +: 8] == "|" ? 8'h0D :
+                              type_text[8*n +: 8] == "~" ? 8'h1B : type_text[8*n +: 8]);
+            type_char(8'h0D);
+            @(negedge clk);
+            wait (!typer_busy);
+            repeat (after_clks) @(posedge clk);
+        end
+
+        // Ein ganzes Bild aufnehmen
         armed = 1'b1;
         wait (n_pixels == W * H);
         write_ppm;
