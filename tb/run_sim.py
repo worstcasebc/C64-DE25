@@ -129,7 +129,7 @@ def main() -> int:
     args = parser.parse_args()
 
     BUILD.mkdir(parents=True, exist_ok=True)
-    # Die ROM-Abbilder werden von tb_soc_mini/tb_soc_c64 (und Quartus) gelesen.
+    # Die ROM-Abbilder werden von tb_soc_c64/tb_c64_video (und Quartus) gelesen.
     if subprocess.run([sys.executable, str(ROOT / "sw" / "py" / "build_rom.py")], cwd=ROOT).returncode != 0:
         return 1
     names = args.testbench or [p.stem for p in sorted((ROOT / "tb").glob("tb_*.v"))]

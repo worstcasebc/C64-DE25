@@ -7,7 +7,6 @@ Aufruf (aus dem Projektverzeichnis):
 
 Ergebnis in sw/asm/build/: <name>.bin (Rohdaten), <name>.map und <name>.lst
 zum Nachlesen sowie je ROM eine Hex-Datei (ein Byte pro Zeile für $readmemh):
-    hello     -> hello.hex                                  (Mini-System)
     banktest  -> banktest_basic.hex, banktest_char.hex,
                  banktest_kernal.hex                        (C64-Speicherkarte)
 
@@ -29,7 +28,6 @@ CC65_BIN = ROOT / "tools" / "cc65" / "bin"  # lokaler cc65-Snapshot
 # Programm -> (Linker-Konfiguration, ROMs in der Reihenfolge der .bin-Datei
 # als (Namenszusatz, Größe))
 TARGETS = {
-    "hello": ("mini.cfg", [("", 0x2000)]),
     "banktest": ("c64.cfg", [("_basic", 0x2000), ("_char", 0x1000), ("_kernal", 0x2000)]),
 }
 

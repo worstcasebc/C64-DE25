@@ -39,7 +39,6 @@ set_global_assignment -name VHDL_FILE ../rtl/cpu/vendor/t65/T65.vhd
 set_global_assignment -name VHDL_FILE ../rtl/cpu/cpu_t65.vhd
 set_global_assignment -name VERILOG_FILE ../rtl/cpu/cpu_port.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/c64_addr_decode.v
-set_global_assignment -name VERILOG_FILE ../rtl/mem/ram_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/rom_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/ram_dp_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/rom_dp_sync.v
