@@ -1,4 +1,4 @@
-"""Simuliert Testbenches mit Icarus Verilog.
+"""Simuliert Testbenches mit Icarus Verilog oder Questa.
 
 Aufruf (aus dem Projektverzeichnis):
     python tb/run_sim.py              alle tb/tb_*.v
@@ -7,6 +7,11 @@ Aufruf (aus dem Projektverzeichnis):
 
 Jede Testbench muss am Ende "PASS: <name>" ausgeben; jede Zeile mit "FAIL"
 gilt als Fehler. Wellenformen landen in tb/build/<name>.vcd.
+
+Normalerweise läuft Icarus. Icarus kann aber kein VHDL; Testbenches, die den
+VIC-II aus FPGA64 (rtl/video/vendor/fpga64/*.vhd) brauchen, tragen deshalb
+die Zeile "// Simulator: Questa" und laufen über Questa (im Quartus-Paket
+enthalten), das Verilog und VHDL gemeinsam simuliert.
 """
 import argparse
 import shutil
@@ -17,6 +22,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "tb" / "build"
 ICARUS_DIR = Path(r"C:\iverilog")  # Standardpfad des Windows-Installers
+QUESTA_DIR = Path(r"C:\altera_pro\26.1\questa_fse\win64")
+QUESTA_MARKER = "// Simulator: Questa"
+# Die VHDL-Bibliotheken warnen bei jedem Vergleich mit einem noch unbestimmten
+# Wert. Beim VIC-II sind das Millionen Zeilen, solange Register unbeschrieben
+# sind (wie beim echten Chip nach dem Einschalten) — deshalb abgeschaltet.
+QUESTA_DO = "set NumericStdNoWarnings 1; set StdArithNoWarnings 1; run -all; quit -f"
 
 
 def find_tool(name: str, fallback: Path) -> str:
@@ -29,13 +40,52 @@ def find_tool(name: str, fallback: Path) -> str:
     sys.exit(f"{name} nicht gefunden (weder im PATH noch unter {fallback})")
 
 
+def run_tb_questa(name: str, rtl: list[str], helpers: list[str], plusargs: tuple[str, ...]) -> bool:
+    """Übersetzt VHDL und Verilog in eine Questa-Bibliothek und simuliert."""
+    tool = {t: find_tool(t, QUESTA_DIR / f"{t}.exe") for t in ("vlib", "vcom", "vlog", "vsim")}
+    vhdl = [str(p.relative_to(ROOT)) for p in sorted((ROOT / "rtl").rglob("*.vhd"))]
+    work = BUILD / "questa" / name
+    shutil.rmtree(work, ignore_errors=True)
+    work.mkdir(parents=True)
+    # Questa versteht in Bibliotheksnamen nur Schrägstriche; Pfade relativ zu ROOT.
+    rel = work.relative_to(ROOT).as_posix()
+    lib = f"{rel}/work"
+
+    steps = [
+        [tool["vlib"], lib],
+        [tool["vcom"], "-2008", "-quiet", "-work", lib, *vhdl],
+        [tool["vlog"], "-quiet", "-work", lib, f"tb/{name}.v", *helpers, *rtl],
+    ]
+    for cmd in steps:
+        step = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+        if step.returncode != 0:
+            print(step.stdout + step.stderr)
+            return False
+
+    sim = subprocess.run(
+        [tool["vsim"], "-c", "-quiet", "-lib", lib, "-l", f"{rel}/transcript",
+         "-wlf", f"{rel}/vsim.wlf", name, *plusargs, "-do", QUESTA_DO],
+        cwd=ROOT, capture_output=True, text=True,
+    )
+    output = sim.stdout + sim.stderr
+    # Questa stellt jeder Ausgabezeile "# " voran; Fehler des Werkzeugs selbst
+    # beginnen mit "** Error".
+    lines = [ln[2:] for ln in output.splitlines() if ln.startswith("# ") and not ln.startswith("# //")]
+    print("\n".join(ln for ln in lines if ln.strip()))
+    text = "\n".join(lines)
+    return f"PASS: {name}" in text and "FAIL" not in text and "** Error" not in output
+
+
 def run_tb(name: str, plusargs: tuple[str, ...] = ()) -> bool:
     """Übersetzt und simuliert eine Testbench; plusargs gehen an die Simulation."""
-    iverilog = find_tool("iverilog", ICARUS_DIR / "bin" / "iverilog.exe")
-    vvp = find_tool("vvp", ICARUS_DIR / "bin" / "vvp.exe")
     rtl = [str(p.relative_to(ROOT)) for p in sorted((ROOT / "rtl").rglob("*.v"))]
     # Hilfsmodule für Testbenches: alle tb/*.v, die keine Testbench sind.
     helpers = [f"tb/{p.name}" for p in sorted((ROOT / "tb").glob("*.v")) if not p.name.startswith("tb_")]
+    if QUESTA_MARKER in (ROOT / "tb" / f"{name}.v").read_text(encoding="utf-8"):
+        return run_tb_questa(name, rtl, helpers, plusargs)
+
+    iverilog = find_tool("iverilog", ICARUS_DIR / "bin" / "iverilog.exe")
+    vvp = find_tool("vvp", ICARUS_DIR / "bin" / "vvp.exe")
     out = BUILD / f"{name}.vvp"
 
     compile_cmd = [iverilog, "-g2005", "-Wall", "-Wno-timescale", "-s", name, "-o", str(out),
