@@ -32,8 +32,8 @@ lehnen das Original ab. Geändert wurde nur die Form, nicht die Funktion:
   auf später gelesene Dateien durchschlägt.
 
 Alle Änderungen stehen als Unterschied zum Original in `quartus_pro.patch`.
-Für einen neueren Stand von MiSTer: Originaldateien holen und den Patch
-anwenden bzw. die Punkte oben nachziehen.
+Für einen neueren Stand von MiSTer: `COMMIT` in `sw/py/fetch_mister.py`
+ändern; passt der Patch dann nicht mehr, die Punkte oben nachziehen.
 
 ## Lizenz
 
@@ -45,6 +45,18 @@ anwenden bzw. die Punkte oben nachziehen.
 - `sid_top.sv`, `sid_voice.sv`, `sid_envelope.sv` und `sid_tables.sv` tragen
   keinen Lizenzvermerk, und das MiSTer-Repository enthält keine Lizenzdatei.
 
-Für den privaten Gebrauch in diesem lokalen Repository ist das unkritisch.
-**Vor einer Veröffentlichung des Repositorys muss die Lizenzlage geklärt
-werden**; die CERN-OHL-S betrifft dann voraussichtlich das ganze Design.
+Wegen der Dateien ohne Lizenzvermerk sind alle sechs nicht eingecheckt; im
+Repository steht nur der Patch mit den Änderungen oben. Offen bleibt: Wer
+einen fertigen Bitstream weitergibt, gibt die beiden Dateien unter der
+CERN-OHL-S mit weiter; sie betrifft dann voraussichtlich das ganze Design.
+
+## Nicht im Repository: mit Skript holen
+
+Aus dem Projektverzeichnis:
+
+```
+python sw/py/fetch_mister.py
+```
+
+Das Skript lädt die sechs Dateien in genau dem Stand oben herunter, wendet
+`quartus_pro.patch` an und legt sie hier ab (zusammen mit VIC-II und CIA).

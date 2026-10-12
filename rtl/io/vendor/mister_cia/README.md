@@ -32,6 +32,17 @@ Unterschied zum Original in `quartus_pro.patch`.
 ## Lizenz
 
 Die Datei trägt keinen Lizenzvermerk, und das MiSTer-Repository enthält keine
-Lizenzdatei. Für den privaten Gebrauch in diesem lokalen Repository ist das
-unkritisch. **Vor einer Veröffentlichung des Repositorys muss die Lizenzlage
-geklärt werden.**
+Lizenzdatei. Sie ist deshalb nicht eingecheckt; im Repository steht nur der
+Patch mit der Änderung oben.
+
+## Nicht im Repository: mit Skript holen
+
+Aus dem Projektverzeichnis:
+
+```
+python sw/py/fetch_mister.py
+```
+
+Das Skript lädt `rtl/mos6526.v` in genau dem Stand oben herunter, wendet
+`quartus_pro.patch` an und legt das Ergebnis als `mos6526.sv` hier ab
+(zusammen mit VIC-II und SID).

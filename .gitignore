@@ -45,3 +45,9 @@ quartus_hps/**
 !quartus_hps/*.qpf
 !quartus_hps/*.qsf
 !quartus_hps/*.bat
+
+# Cores aus MiSTer mit ungeklärter Lizenz: nicht einchecken, sondern mit
+# sw/py/fetch_mister.py holen (README.md und Patch im Ordner bleiben).
+rtl/video/vendor/fpga64/*.vhd
+rtl/audio/vendor/mister_sid/*.sv
+rtl/io/vendor/mister_cia/*.sv

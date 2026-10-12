@@ -9,10 +9,14 @@
 - Datei nicht verändern; Anpassungen nur über Wrapper in `rtl/video/`.
 - Sprache: VHDL. Simulation deshalb mit Questa statt Icarus.
 
-## Lizenz: ungeklärt
+## Nicht im Repository: mit Skript holen
 
 Die Datei nennt nur den Autor, aber keine Lizenz, und das MiSTer-Repository
-enthält keine Lizenzdatei. Für den privaten Gebrauch in diesem lokalen
-Repository ist das unkritisch. **Vor einer Veröffentlichung des Repositorys
-muss die Lizenzlage geklärt oder die Datei herausgenommen werden** (dann wie
-die ROMs behandeln: nicht einchecken, per Skript holen).
+enthält keine Lizenzdatei. Sie ist deshalb nicht eingecheckt. Aus dem
+Projektverzeichnis holt
+
+```
+python sw/py/fetch_mister.py
+```
+
+sie in genau dem Stand oben hierher (zusammen mit SID und CIA).
