@@ -37,41 +37,26 @@ So kommen sie her:
 3. Projekt in Quartus öffnen. Meldet Quartus veraltete Bausteine, einmal
    *Project → Upgrade IP Components* ausführen (für dieses Projekt geschehen
    von 25.1.1 auf 26.1).
-4. Die Bridge `c64_bridge` von Hand ergänzen, siehe nächster Abschnitt. Ohne
-   sie fehlen dem System die Anschlüsse `c64_m0_*`, die das Top-Level
-   erwartet.
+4. Die Bridges `c64_bridge` und `disk_bridge` von Hand ergänzen, siehe
+   nächster Abschnitt. Ohne sie fehlen dem System die Anschlüsse `c64_m0_*`
+   und `disk_m0_*`, die das Top-Level erwartet.
 
-## Eigene Änderung am System: Bridge `c64_bridge`
+## Eigene Änderung am System: Bridges `c64_bridge` und `disk_bridge`
 
-Das Register für die Bytes an den C64 (`rtl/io/hps_byte_port.v`) steckt nicht
-im Platform-Designer-System, sondern im Top-Level. Dafür wird ein Stück des
-Avalon-Busses aus dem System herausgeführt — wie eine Steckdose in der
-Hauswand, an die außen ein eigenes Gerät kommt. Die Steckdose ist eine zweite
-*Avalon Memory Mapped Pipeline Bridge*.
+Die Register für den C64 (`rtl/io/hps_byte_port.v`) und für die Diskette
+(`rtl/drive/hps_disk_port.v`) stecken nicht im Platform-Designer-System,
+sondern im Top-Level. Dafür werden zwei Stücke des Avalon-Busses aus dem
+System herausgeführt — wie Steckdosen in der Hauswand, an die außen eigene
+Geräte kommen. Jede Steckdose ist eine *Avalon Memory Mapped Pipeline Bridge*.
 
-In Platform Designer (*Tools → Platform Designer*, `qsys_top.qsys` öffnen):
+| Bridge        | bedient         | Adressbreite | Basis an `pb_cpu_0.m0` | Export    |
+|---------------|-----------------|--------------|------------------------|-----------|
+| `c64_bridge`  | `hps_byte_port` | 4            | `0x0001_0100`          | `c64_m0`  |
+| `disk_bridge` | `hps_disk_port` | 14           | `0x0001_4000`          | `disk_m0` |
 
-1. In das Untersystem `subsys_periph` (`peripheral_subsys.qsys`) wechseln.
-2. Aus dem IP Catalog *Avalon Memory Mapped Pipeline Bridge IP* hinzufügen,
-   Name `c64_bridge`. Einstellungen:
-   - *Data width* 32, *Symbol width* 8, *Address units* SYMBOLS
-   - *Use automatically-determined address width* aus, *Address width* 4
-   - *Maximum burst size (words)* 1
-   - alles andere wie vorgegeben
-3. Verbinden:
-   - `c64_bridge.clk` mit `periph_clk.out_clk`
-   - `c64_bridge.reset` mit `periph_rst_in.out_reset`
-   - `c64_bridge.s0` mit `pb_cpu_0.m0`, Basisadresse `0x0001_0100`
-4. `c64_bridge.m0` exportieren, Name `c64_m0`.
-5. Zurück in `qsys_top`: Am Untersystem `subsys_periph` gibt es jetzt den
-   Anschluss `c64_m0`. Ebenfalls exportieren, Name wieder `c64_m0`.
-6. Speichern und *Generate HDL*. In `qsys_top/qsys_top_inst.v` müssen danach
-   zehn Anschlüsse `c64_m0_*` stehen (`address` 4 Bit breit).
-
-Platform Designer legt für die Bridge die Datei
-`peripheral_subsys/ip/peripheral_subsys/peripheral_subsys_mm_bridge_0.ip` an
-(der Dateiname behält den vorgeschlagenen Namen, auch wenn die Bridge im
-System `c64_bridge` heißt). Unter diesem Namen steht sie in der `.qsf`.
+Die Schritte im Platform Designer stehen Klick für Klick in
+[INSTALL.md](../INSTALL.md), Abschnitt C4, zusammen mit der Reihenfolge aller
+übrigen Bau- und Einrichtungsschritte.
 
 ## Bauen: nur über einen kurzen Pfad
 
@@ -108,6 +93,17 @@ Basis aus Sicht von Linux: `0x2000_0000` (auf dem Board bestätigt).
 | `0x2001_0104` | `STATUS`     | `hps_byte_port`: Bit 0 = 1, solange das letzte Byte unterwegs ist (nur lesen); Bit 1 = 1: Taste RESTORE gedrückt (lesen und schreiben) |
 | `0x2001_0108` | `KEYS_LO`    | `hps_byte_port`: Tasten 31..0 im Gitter des C64, 1 = gedrückt (Nummern wie in `rtl/io/key_matrix.v`) |
 | `0x2001_010C` | `KEYS_HI`    | `hps_byte_port`: Tasten 63..32 |
+| `0x2001_4000` | `REQUEST`    | `hps_disk_port`: Anforderung des Laufwerks — Bit 0 lesen, Bit 1 schreiben, Bit 13..8 Anzahl Blöcke − 1, Bit 31..16 erster Block |
+| `0x2001_4004` | `CONTROL`    | `hps_disk_port`: schreiben 1 = geliefert; lesen Bit 0 = beschäftigt |
+| `0x2001_4008` | `MOUNT`      | `hps_disk_port`: Bit 0 Diskette vorhanden, Bit 1 Schreibschutz, Bit 2 Format (0 = `.D64`, 1 = `.G64`) |
+| `0x2001_6000` | Puffer       | `hps_disk_port`: 8192 Bytes für die gelieferten Blöcke, nur schreiben |
+
+`sw/py/c64_disk.py <Abbild>` legt eine `.D64` oder `.G64` in das Laufwerk
+1541 ein und bedient dessen Anforderungen. Auf dem Board bestätigt mit einer
+`.D64`: Verzeichnis (`LOAD "$",8`), und ein Spiel lädt und läuft. Noch nicht
+ausprobiert ist `.G64`; Schreiben auf die Diskette ist nicht umgesetzt, die
+Diskette wird mit Schreibschutz eingelegt. Ohne eingelegte Diskette bleibt
+das Laufwerk im Reset.
 
 `sw/py/c64_keys.py` liest eine USB-Tastatur unter Linux und schreibt den
 Zustand nach `KEYS_LO` und `KEYS_HI` (auf dem Board bestätigt: Die Tastatur

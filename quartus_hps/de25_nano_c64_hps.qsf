@@ -1,3 +1,4 @@
+set_global_assignment -name BOARD default
 # de25_nano_c64_hps.qsf — wie quartus/de25_nano_c64.qsf, dazu das HPS (siehe README.md)
 # Pins laut DE25-Nano User Manual und Terasic golden_top.qsf, siehe docs/pinout.md
 
@@ -45,6 +46,8 @@ set_global_assignment -name VERILOG_FILE ../rtl/mem/ram_dp_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/rom_dp_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/fifo_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/drive/ce_fraction.v
+set_global_assignment -name VERILOG_FILE ../rtl/mem/ram_2clk.v
+set_global_assignment -name VERILOG_FILE ../rtl/drive/hps_disk_port.v
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/drive/drive_1541.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/drive/vendor/mister_c1541/c1541_multi.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/drive/vendor/mister_c1541/c1541_drv.sv
@@ -215,8 +218,10 @@ set_global_assignment -name QSYS_FILE hps_subsys/hps_subsys.qsys
 set_global_assignment -name QSYS_FILE peripheral_subsys/peripheral_subsys.qsys
 set_global_assignment -name IP_FILE hps_subsys/ip/qsys_top/emif_io96b_hps.ip
 set_global_assignment -name IP_FILE ip/qsys_top/qsys_top_ace5lite_cache_coherency_translator_0.ip
-# Eigene Ergänzung: Bridge c64_bridge für hps_byte_port (siehe README.md)
+# Eigene Ergänzung: Bridges c64_bridge (hps_byte_port) und disk_bridge
+# (hps_disk_port), siehe INSTALL.md, Abschnitt C4
 set_global_assignment -name IP_FILE peripheral_subsys/ip/peripheral_subsys/peripheral_subsys_mm_bridge_0.ip
+set_global_assignment -name IP_FILE peripheral_subsys/ip/peripheral_subsys/peripheral_subsys_mm_bridge_1.ip
 
 # --- Pins des HPS, seines Speichers LPDDR4A und des zweiten 50-MHz-Takts (Terasic golden_top.qsf) ---
 set_instance_assignment -name IO_STANDARD "3.3-V LVCMOS" -to CLOCK2_50

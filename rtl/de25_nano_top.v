@@ -31,8 +31,10 @@
 //         Asynchrone Eingänge kommen nur über sync_2ff herein.
 //         Mit HPS gibt es eine zweite Domäne: clk_100 (100 MHz aus der PLL
 //         "pll" an CLOCK2_50) für die Brücken zwischen HPS und FPGA. Von
-//         dort nach clk_sys führt genau ein Weg: hps_byte_port, über den
-//         Linux dieselben Bytes schickt wie der PC über FPGA_UART_RX.
+//         Zwischen ihr und clk_sys gibt es zwei Übergänge: hps_byte_port,
+//         über den Linux dieselben Bytes schickt wie der PC über
+//         FPGA_UART_RX (dazu die Tasten), und hps_disk_port, über den Linux
+//         dem Laufwerk die Diskette liefert.
 // Ports:  Namen wie im Terasic-Handbuch (Großschreibung nur hier im Top-Level).
 //         KEY und LEDR sind low-aktiv; intern wird alles high-aktiv geführt.
 // IP:     pll_c64 (50 MHz -> 2 x 31,5 MHz, 0 und 180 Grad) und reset_release
@@ -297,34 +299,48 @@ module de25_nano_top #(
     );
 
     // --- Diskettenlaufwerk 1541 ---------------------------------------------
-    // Hängt wie beim echten C64 am seriellen Bus und wird mit dem Rechner
-    // zurückgesetzt. Eine Diskette gibt es noch nicht: Die Anforderungen des
-    // Laufwerks (sd_rd) beantwortet niemand, deshalb bleibt seine Leuchte an
-    // und jeder Zugriff endet mit einem Fehler des Laufwerks.
-    wire drive_led;
+    // Hängt wie beim echten C64 am seriellen Bus. Die Diskette liefert Linux
+    // (hps_disk_port, siehe unten bei "HPS"): Das Laufwerk fordert Spuren an
+    // (sd_rd, sd_lba), Linux schickt sie aus der Abbilddatei.
+    // Solange keine Diskette eingelegt ist, bleibt das Laufwerk im Reset —
+    // wie ausgeschaltet. Sonst wartete es ewig auf seine erste Spur. Ohne
+    // HPS gibt es keine Diskette, also auch kein Laufwerk am Bus.
+    wire        drive_led;
+    wire        disk_present;
+    wire        disk_mounted;
+    wire        disk_readonly;
+    wire        disk_gcr_mode;
+    wire [31:0] sd_lba;
+    wire [5:0]  sd_blk_cnt;
+    wire        sd_rd;
+    wire        sd_wr;
+    wire        sd_ack;
+    wire [13:0] sd_buff_addr;
+    wire [7:0]  sd_buff_dout;
+    wire        sd_buff_wr;
 
     drive_1541 u_drive_1541 (
         .clk          (clk_sys),
-        .rst          (rst),
+        .rst          (rst | ~disk_present),
         .iec_atn_i    (iec_atn),
         .iec_clk_i    (iec_clk_c64),
         .iec_data_i   (iec_data_c64),
         .iec_clk_o    (iec_clk_drive),
         .iec_data_o   (iec_data_drive),
         .led          (drive_led),
-        .img_mounted  (1'b0),
-        .img_readonly (1'b0),
-        .img_size     (32'd0),
-        .gcr_mode     (1'b0),
-        .sd_lba       (),
-        .sd_blk_cnt   (),
-        .sd_rd        (),
-        .sd_wr        (),
-        .sd_ack       (1'b0),
-        .sd_buff_addr (14'd0),
-        .sd_buff_dout (8'd0),
+        .img_mounted  (disk_mounted),
+        .img_readonly (disk_readonly),
+        .img_size     ({31'd0, disk_present}),  // gebraucht wird nur: 0 oder nicht
+        .gcr_mode     (disk_gcr_mode),
+        .sd_lba       (sd_lba),
+        .sd_blk_cnt   (sd_blk_cnt),
+        .sd_rd        (sd_rd),
+        .sd_wr        (sd_wr),
+        .sd_ack       (sd_ack),
+        .sd_buff_addr (sd_buff_addr),
+        .sd_buff_dout (sd_buff_dout),
         .sd_buff_din  (),
-        .sd_buff_wr   (1'b0)
+        .sd_buff_wr   (sd_buff_wr)
     );
 
     // --- Ton: SID -> Mittelwert -> I2S zum HDMI-Sender ----------------------
@@ -462,9 +478,10 @@ module de25_nano_top #(
     // --- HPS -----------------------------------------------------------------
     // Verdrahtung wie in Terasics golden_top.v. Die Register für Taster und
     // Schalter gibt es im System noch, sie sind hier aber nicht angeschlossen.
-    // c64_m0 ist ein Stück Avalon-Bus, das aus dem System herausgeführt ist
-    // (Bridge c64_bridge, von Hand ergänzt, siehe quartus_hps/README.md);
-    // daran hängt hps_byte_port mit seinen Registern DATA und STATUS.
+    // c64_m0 und disk_m0 sind zwei Stücke Avalon-Bus, die aus dem System
+    // herausgeführt sind (Bridges c64_bridge und disk_bridge, von Hand
+    // ergänzt, siehe quartus_hps/README.md). An c64_m0 hängt hps_byte_port
+    // (Bytes, Tasten), an disk_m0 hps_disk_port (Diskette für das Laufwerk).
     wire [2:0] hps_led;
 
 `ifdef ENABLE_HPS
@@ -514,7 +531,53 @@ module de25_nano_top #(
         .restore_q         (hps_restore_q)
     );
 
+    wire [13:0] disk_m0_address;    // in Bytes; ab 0x2000 der Puffer
+    wire        disk_m0_write;
+    wire [31:0] disk_m0_writedata;
+    wire [3:0]  disk_m0_byteenable;
+    wire        disk_m0_read;
+    wire [31:0] disk_m0_readdata;
+    wire        disk_m0_readdatavalid;
+    wire        disk_m0_waitrequest;
+
+    hps_disk_port u_hps_disk_port (
+        .clk_av            (clk_100),
+        .rst_av            (rst_av),
+        .avs_address       (disk_m0_address[13:2]),
+        .avs_write         (disk_m0_write),
+        .avs_writedata     (disk_m0_writedata),
+        .avs_byteenable    (disk_m0_byteenable),
+        .avs_read          (disk_m0_read),
+        .avs_readdata      (disk_m0_readdata),
+        .avs_readdatavalid (disk_m0_readdatavalid),
+        .avs_waitrequest   (disk_m0_waitrequest),
+        .clk               (clk_sys),
+        .rst               (rst),
+        .sd_lba            (sd_lba),
+        .sd_blk_cnt        (sd_blk_cnt),
+        .sd_rd             (sd_rd),
+        .sd_wr             (sd_wr),
+        .sd_ack            (sd_ack),
+        .sd_buff_addr      (sd_buff_addr),
+        .sd_buff_dout      (sd_buff_dout),
+        .sd_buff_wr        (sd_buff_wr),
+        .img_mounted       (disk_mounted),
+        .img_present       (disk_present),
+        .img_readonly      (disk_readonly),
+        .gcr_mode          (disk_gcr_mode)
+    );
+
     qsys_top u_qsys_top (
+        .disk_m0_waitrequest                   (disk_m0_waitrequest),
+        .disk_m0_readdata                      (disk_m0_readdata),
+        .disk_m0_readdatavalid                 (disk_m0_readdatavalid),
+        .disk_m0_burstcount                    (),
+        .disk_m0_writedata                     (disk_m0_writedata),
+        .disk_m0_address                       (disk_m0_address),
+        .disk_m0_write                         (disk_m0_write),
+        .disk_m0_read                          (disk_m0_read),
+        .disk_m0_byteenable                    (disk_m0_byteenable),
+        .disk_m0_debugaccess                   (),
         .c64_m0_waitrequest                    (c64_m0_waitrequest),
         .c64_m0_readdata                       (c64_m0_readdata),
         .c64_m0_readdatavalid                  (c64_m0_readdatavalid),
@@ -594,6 +657,14 @@ module de25_nano_top #(
     assign hps_valid_q = 1'b0;
     assign hps_keys_q  = 64'd0;
     assign hps_restore_q = 1'b0;
+    assign disk_present  = 1'b0;
+    assign disk_mounted  = 1'b0;
+    assign disk_readonly = 1'b0;
+    assign disk_gcr_mode = 1'b0;
+    assign sd_ack        = 1'b0;
+    assign sd_buff_addr  = 14'd0;
+    assign sd_buff_dout  = 8'd0;
+    assign sd_buff_wr    = 1'b0;
 `endif
 
     // --- LEDs ---------------------------------------------------------------

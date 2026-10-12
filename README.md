@@ -16,7 +16,7 @@ a testbench.
 ## Status
 
 The C64 runs on the board: BASIC start screen, picture and SID sound over
-HDMI, programs loaded from the PC. Timing-critical software works, including
+HDMI, programs loaded from the PC or from a disk image. Timing-critical software works, including
 an FLI picture and test programs with SID sound. Linux runs next to it on the
 HPS and can type on the C64 keyboard and load programs into its memory.
 
@@ -41,9 +41,9 @@ Not there yet:
 - Keyboard: a USB keyboard works through Linux on the HPS, in the HPS build
   only. Otherwise keystrokes come from a PC over
   the UART (see [Controlling the C64](#controlling-the-c64)).
-- Disks: a 1541 disk drive sits on the serial bus and answers the C64, but it
-  cannot be given a disk yet, so every access ends in an error of the drive.
-  `.D64` support is the next step. No tape or cartridges.
+- Disks: a 1541 disk drive reads `.D64` images that Linux on the HPS supplies
+  (HPS build only). Not yet: writing to the disk, `.G64` images (prepared but
+  untried), and choosing the image from the C64. No tape or cartridges.
 - No joysticks.
 - PAL only.
 - A menu or file browser on the HPS.
@@ -81,110 +81,28 @@ docs/           notes, pin assignments
 
 ## Building
 
-### Requirements
+The complete procedure, from a fresh clone to the running board, is in
+[INSTALL.md](INSTALL.md): tools, fetching the third-party cores, converting
+the ROMs, the two bridges that have to be added in Platform Designer for the
+HPS project, building, loading, and setting up the scripts on the board.
 
-- **Quartus Prime Pro** — the Agilex 5 is not supported by the Standard or
-  Lite editions. The project was last built with version 26.1.
-- **Python 3**, plus `pyserial` for the terminal:
-  `python -m pip install pyserial`
-- **cc65** (`ca65`, `ld65`), in the `PATH` or under `tools/cc65/bin` — only
-  needed for the test ROMs.
-- For simulation: **Icarus Verilog**, and **Questa** (part of the Quartus
-  package) for everything that involves the VHDL or SystemVerilog cores.
+In short:
 
-The helper scripts were written and used on Windows; `c64_term.py` is
-Windows-only.
+- **Quartus Prime Pro** is required; the Agilex 5 is not supported by the
+  Standard or Lite editions. The project was last built with version 26.1.
+- Three kinds of files are not in this repository and have to be supplied
+  first: the cores from MiSTer (`python sw/py/fetch_mister.py`), your own ROM
+  files in `roms/` (`python sw/py/build_rom.py` converts them), and for the
+  HPS project Terasic's GHRD files (`python sw/py/fetch_ghrd.py <path>`).
+- There are two projects for the same top level `rtl/de25_nano_top.v`:
 
-### 1. Third-party cores
+  | Project | Contains | Use it for |
+  |---------|----------|------------|
+  | `quartus/de25_nano_c64.qpf` | the C64 alone | quick builds, no Linux needed |
+  | `quartus_hps/de25_nano_c64_hps.qpf` | C64 and HPS | everything that needs Linux |
 
-The VIC-II, SID, CIA and 1541 disk drive cores from MiSTer are not in this
-repository, because their licence situation is unclear or requires sharing
-alike. Fetch them once, from the repository root:
-
-```
-python sw/py/fetch_mister.py
-```
-
-The script downloads the files from the
-[MiSTer C64 core](https://github.com/MiSTer-devel/C64_MiSTer) at a fixed
-commit and applies the patches for SID, CIA and the disk drive that make them
-acceptable to Quartus Pro and Questa. It needs `git` and an internet connection. Simulation
-needs these files as well.
-
-### 2. ROMs
-
-The original KERNAL, BASIC and character ROMs are copyrighted and are not in
-this repository. Put your own copies into `roms/` under these names:
-
-| File | Size |
-|------|------|
-| `basic-901226-01.bin` | 8192 bytes |
-| `chargen-901225-01.bin` | 4096 bytes |
-| `kernal-901227-03.bin` | 8192 bytes |
-| `dos1541-325302-01+901229-05.bin` (ROM of the 1541 disk drive) | 16384 bytes |
-
-Then convert them, from the repository root:
-
-```
-python sw/py/build_rom.py
-```
-
-This writes `c64_basic.hex`, `c64_chargen.hex`, `c64_kernal.hex` and
-`c1541_rom.hex` to
-`sw/asm/build/`, where the Quartus projects expect them. The same call also
-assembles the project's own test ROMs (`banktest_*.hex`). Without the original
-ROMs you can enter those three files as the parameters `BASIC_FILE`,
-`CHAR_FILE` and `KERNAL_FILE` of `rtl/de25_nano_top.v`; that gives a
-memory-map test, not a working C64.
-
-### 3. Compile
-
-There are two projects for the same top level `rtl/de25_nano_top.v`:
-
-| Project | Contains | Use it for |
-|---------|----------|------------|
-| `quartus/de25_nano_c64.qpf` | the C64 alone | quick builds, no Linux needed |
-| `quartus_hps/de25_nano_c64_hps.qpf` | C64 and HPS | everything that needs Linux |
-
-Open the project in Quartus and run *Processing → Start Compilation*. The
-result is `output_files/de25_nano_c64.sof` or
-`output_files/de25_nano_c64_hps.sof`.
-
-Three things to know about the HPS project
-(details in [quartus_hps/README.md](quartus_hps/README.md)):
-
-- **Terasic files.** The Platform Designer system with the HPS, its IP files
-  and the HPS bootloader come from Terasic's GHRD example and may not be
-  redistributed, so they are not in this repository. Download Terasic's
-  resource package for the DE25-Nano from the board's page at terasic.com,
-  unpack it, and copy the files in before the first build:
-
-  ```
-  python sw/py/fetch_ghrd.py <resource package>\Demonstration\SoC_FPGA\GHRD
-  ```
-
-  If Quartus then reports outdated IP, run *Project → Upgrade IP Components*
-  once.
-- **One manual change.** Terasic's system needs one addition in Platform
-  Designer before the build: a bridge that leads a piece of the Avalon bus out
-  to the top level. The steps are in
-  [quartus_hps/README.md](quartus_hps/README.md).
-- **Short path.** In a deeply nested directory Quartus aborts the HPS build
-  after about 40 seconds. Map the repository to a drive letter first
-  (`subst Q: <path to the repository>`) and open the project from there.
-- **Bootloader.** The `.sof` from the build does not contain the HPS
-  bootloader. Run `quartus_hps\sof_with_hps.bat` afterwards; it creates
-  `output_files\de25_nano_c64_hps_boot.sof`, which is the file to load.
-
-### 4. Load onto the board
-
-Load the `.sof` over JTAG with the Quartus Programmer, using the on-board
-USB-Blaster III. Switch SW5 must be in JTAG mode (SW5.1–5.3 OFF; change it
-only with the board powered off). The QSPI flash is not touched, so the design
-is gone after a power cycle.
-
-For the HPS variant, Linux boots from the microSD card; the project uses the
-card image that Terasic supplies for the board.
+- The design is loaded over JTAG and is gone after a power cycle. For the HPS
+  project, Linux boots from the microSD card with Terasic's card image.
 
 ### Simulation
 
@@ -208,7 +126,7 @@ ten minutes and only runs when it is named.
 | `SW0` | up: colour-bar test picture instead of the C64 picture |
 | `LEDR0` | 1 Hz heartbeat — blinks only while the PLL is running |
 | `LEDR1`–`LEDR3` | HPS build only: switched from Linux |
-| `LEDR4` | light of the 1541 disk drive (stays on as long as no disk can be supplied) |
+| `LEDR4` | light of the 1541 disk drive |
 
 Picture and sound come out of the HDMI connector.
 
@@ -264,6 +182,17 @@ sudo python3 c64_hps.py --load game.prg --run     load a program and type RUN
 
 The bytes go through a register at `0x2001_0100` into the same path as the
 bytes from the PC, so do not load from both sides at the same time.
+
+A disk image is inserted into the 1541 drive with `sw/py/c64_disk.py`:
+
+```
+sudo python3 c64_disk.py game.d64
+```
+
+The disk stays inserted as long as the script runs; Ctrl+C removes it, and
+the drive is then switched off. After inserting, give the drive a good two
+seconds, then use it as on a real C64: `LOAD "$",8`, `LOAD "*",8,1`. The disk
+is write-protected.
 
 A USB keyboard at the board's USB host connector becomes the C64 keyboard
 with a third script, `sw/py/c64_keys.py`:
