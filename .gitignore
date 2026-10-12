@@ -36,6 +36,7 @@ quartus/serv_req_info.txt
 
 # Testprogramme aus fremden Veröffentlichungen (nicht einchecken)
 sw/prg/
+sw/d64/
 
 # HPS-Projekt: nur die eigenen Dateien einchecken. Alles andere ist Erzeugnis
 # oder stammt aus Terasics GHRD und darf nicht weitergegeben werden

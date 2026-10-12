@@ -33,8 +33,10 @@
 //           $DC00-$DCFF  CIA 1 (aus MiSTer, taktgenau): Tastatur, Timer; ihr Interrupt geht an den
 //                        IRQ der CPU
 //           $DD00-$DDFF  CIA 2: Port A Bit 0/1 (invertiert) wählen, welches
-//                        16-KB-Viertel des Speichers der VIC-II sieht; ihr
-//                        Interrupt geht an den NMI der CPU
+//                        16-KB-Viertel des Speichers der VIC-II sieht; Bit 3
+//                        bis 7 sind der serielle Bus zum Diskettenlaufwerk
+//                        (siehe "IEC" unten); ihr Interrupt geht an den NMI
+//                        der CPU
 //           $DE00-$DEFF  UART: schreiben = senden, lesen Bit 7 = frei
 //         Der VIC-II sieht immer das RAM, nur bei $1000-$1FFF in den
 //         Vierteln 0 und 2 stattdessen das Char-ROM.
@@ -53,6 +55,18 @@
 //         Bildlücke). Das ist ein PAL-Raster: 504 Pixel, 312 Zeilen.
 //         sid_audio — Tonsignal des SID mit Vorzeichen; ein neuer Wert pro
 //         CPU-Takt, gültig bei cpu_tick = 1.
+// IEC:    Der serielle Bus zum Laufwerk hat drei Leitungen: ATN ("Achtung",
+//         nur der C64 spricht), CLK und DATA. Jede hängt über einen
+//         Widerstand an 5 V; wer etwas sagen will, zieht sie auf 0, und
+//         mehrere dürfen das gleichzeitig — wie eine Wäscheleine, an der
+//         jeder ziehen kann. Deshalb hat jede Seite getrennte Aus- und
+//         Eingänge, und 0 gewinnt:
+//           iec_atn_o, iec_clk_o, iec_data_o = 0: der C64 zieht die Leitung
+//           (Port A Bit 3, 4, 5 der CIA 2; eine 1 im Register zieht)
+//           iec_clk_i, iec_data_i = 0: ein Laufwerk zieht die Leitung
+//         Die CPU liest an Port A Bit 6 (CLK) und Bit 7 (DATA) den Pegel
+//         der Leitung, also das, was beide Seiten zusammen ergeben. Wie bei
+//         MiSTer wird er einmal pro CPU-Takt übernommen.
 // SID:    Er braucht mindestens 16 Systemtakte pro CPU-Takt, um Ton zu
 //         berechnen, also PIX_DIV >= 2. Mit PIX_DIV = 1 funktionieren nur
 //         seine Registerzugriffe.
@@ -72,6 +86,11 @@ module soc_c64 #(
     output wire        uart_txd,
     input  wire [63:0] keys,
     input  wire        restore,
+    output wire        iec_atn_o,
+    output wire        iec_clk_o,
+    output wire        iec_data_o,
+    input  wire        iec_clk_i,
+    input  wire        iec_data_i,
     input  wire        dma_req,
     input  wire [15:0] dma_addr,
     input  wire [7:0]  dma_data,
@@ -477,11 +496,31 @@ module soc_c64 #(
 
     assign cia1_irq = ~cia1_irq_n;
 
-    // CIA 2: Speicherbank des VIC-II; Interrupt an den NMI.
+    // CIA 2: Speicherbank des VIC-II, serieller Bus; Interrupt an den NMI.
     wire [7:0] cia2_dout;
     wire [7:0] cia2_pa_out;
     wire [7:0] cia2_pb_out;
     wire       cia2_irq_n;
+
+    // Serieller Bus: Die Ausgänge gehen im C64 durch Inverter, eine 1 im
+    // Register zieht die Leitung also auf 0. Gelesen wird der Pegel der
+    // Leitung: 1 nur, wenn weder der C64 noch ein Laufwerk zieht.
+    reg iec_clk_q;
+    reg iec_data_q;
+
+    assign iec_atn_o  = ~cia2_pa_out[3];
+    assign iec_clk_o  = ~cia2_pa_out[4];
+    assign iec_data_o = ~cia2_pa_out[5];
+
+    always @(posedge clk) begin
+        if (rst) begin
+            iec_clk_q  <= 1'b1;
+            iec_data_q <= 1'b1;
+        end else if (cpu_slot) begin
+            iec_clk_q  <= iec_clk_i  & iec_clk_o;
+            iec_data_q <= iec_data_i & iec_data_o;
+        end
+    end
 
     mos6526 u_cia2 (
         .mode    (1'b0),
@@ -494,7 +533,7 @@ module soc_c64 #(
         .rs      (addr[3:0]),
         .db_in   (cpu_dout),
         .db_out  (cia2_dout),
-        .pa_in   (cia2_pa_out),
+        .pa_in   (cia2_pa_out & {iec_data_q, iec_clk_q, 6'b111111}),
         .pa_out  (cia2_pa_out),
         .pa_oe   (),
         .pb_in   (cia2_pb_out),

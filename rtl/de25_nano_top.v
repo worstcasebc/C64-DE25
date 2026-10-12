@@ -271,6 +271,11 @@ module de25_nano_top #(
         .uart_txd   (FPGA_UART_TX),
         .keys       (keys),
         .restore    (hps_restore_q),
+        .iec_atn_o  (),             // serieller Bus: noch kein Laufwerk
+        .iec_clk_o  (),
+        .iec_data_o (),
+        .iec_clk_i  (1'b1),
+        .iec_data_i (1'b1),
         .dma_req    (dma_req),
         .dma_addr   (dma_addr),
         .dma_data   (dma_data),

@@ -22,6 +22,9 @@
 // ankommt; seinen Ton prüft tb_sid_tone. Mit PIX_DIV = 1 hat er zu wenige
 // Takte, um Ton zu berechnen.
 //
+// Für den Test des seriellen Busses spielt die Testbench ein Laufwerk, das
+// auf ATN antwortet, indem es DATA auf 0 zieht.
+//
 // Zum Schluss die Taste RESTORE: Jeder Druck muss genau einen NMI auslösen,
 // auch wenn die Taste lange gehalten wird. Die NMI-Routine des Testprogramms
 // zählt mit; die Testbench liest den Zähler im RAM.
@@ -32,7 +35,7 @@
 module tb_soc_c64;
 
     localparam CLKS_PER_BIT = 4;
-    localparam LEN          = 139;  // muss zur Länge von EXPECTED passen
+    localparam LEN          = 154;  // muss zur Länge von EXPECTED passen
     localparam [8*LEN-1:0] EXPECTED = {
         "C64-Speicherkarte\015\n",
         "BASIC-ROM  OK\015\n",
@@ -42,7 +45,8 @@ module tb_soc_c64;
         "RAM $E000  OK\015\n",
         "CPU-PORT   OK\015\n",
         "CIA-IRQ    OK\015\n",
-        "CIA-NMI    OK\015\n"
+        "CIA-NMI    OK\015\n",
+        "IEC-BUS    OK\015\n"
     };
 
     reg         clk = 1'b0;
@@ -57,6 +61,7 @@ module tb_soc_c64;
     integer     dma_errors = 0;
     integer     k;
     reg         restore = 1'b0;
+    wire        iec_atn;
     reg [7:0]   nmi_before;
 
     // Zähler der NMI-Routine im Testprogramm (nmi_count in banktest.s, die
@@ -69,6 +74,11 @@ module tb_soc_c64;
         .uart_txd   (txd),
         .keys       (64'd0),
         .restore    (restore),
+        .iec_atn_o  (iec_atn),
+        .iec_clk_o  (),
+        .iec_data_o (),
+        .iec_clk_i  (1'b1),
+        .iec_data_i (iec_atn),      // wie ein Laufwerk: auf ATN mit DATA antworten
         .dma_req    (dma_req),
         .dma_addr   (dma_addr),
         .dma_data   (dma_data),

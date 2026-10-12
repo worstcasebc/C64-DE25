@@ -17,7 +17,10 @@
 ;   CPU-PORT   OK
 ;   CIA-IRQ    OK
 ;   CIA-NMI    OK
+;   IEC-BUS    OK
 ; Im Fehlerfall steht statt OK der gelesene Wert: FEHLER $xx.
+; IEC-BUS braucht ein Laufwerk am seriellen Bus (oder die Testbench, die eines
+; spielt); ohne meldet die Zeile FEHLER $E7.
 ; Zum Schluss füllt es den Bildschirmspeicher: Titel in Zeile 0, ab Zeile 2
 ; alle 256 Zeichen in der Reihenfolge ihrer Codes, sonst Leerzeichen.
 ; Farben wie beim C64-Start (Rahmen und Schrift hellblau, Hintergrund blau),
@@ -39,6 +42,8 @@ CIA_TALO = $DC04        ; CIA 1: Timer A, unteres Byte
 CIA_TAHI = $DC05        ; CIA 1: Timer A, oberes Byte
 CIA_ICR  = $DC0D        ; CIA 1: Interrupts melden/freigeben
 CIA_CRA  = $DC0E        ; CIA 1: Timer A steuern
+CIA2_PA   = $DD00       ; CIA 2: Port A, Bit 3-7 sind der serielle Bus
+CIA2_DDRA = $DD02       ; CIA 2: Richtung von Port A (1 = Ausgang)
 CIA2_TBLO = $DD06       ; CIA 2: Timer B, unteres Byte
 CIA2_TBHI = $DD07       ; CIA 2: Timer B, oberes Byte
 CIA2_ICR  = $DD0D       ; CIA 2: ihre Interrupts gehen an den NMI
@@ -215,6 +220,39 @@ reset:
         ldx #(t_nmi - text)
         jsr report
 
+        ; Serieller Bus: Bit 3 (ATN), 4 (CLK) und 5 (DATA) von Port A ziehen
+        ; mit einer 1 die jeweilige Leitung auf 0; an Bit 6 (CLK) und 7
+        ; (DATA) liest man den Pegel der Leitung. Vier Schritte, je zwei
+        ; gelesene Bits, zusammen ein Byte:
+        ;   nichts ziehen   DATA 1, CLK 1
+        ;   CLK ziehen      DATA 1, CLK 0
+        ;   DATA ziehen     DATA 0, CLK 1
+        ;   ATN ziehen      DATA 0, CLK 1   (das Laufwerk antwortet mit DATA)
+        ; Bit 0 und 1 bleiben 1, damit der VIC-II seine Speicherbank behält.
+        lda #$3F
+        sta CIA2_DDRA
+        lda #0
+        sta got
+        ldx #0
+@iec:
+        lda iec_out,x
+        sta CIA2_PA
+        nop             ; der Pegel wird einmal pro Takt übernommen
+        lda CIA2_PA
+        asl a           ; Bit 7 (DATA) ins Carry ...
+        rol got         ; ... und von rechts in got schieben
+        asl a           ; Bit 6 (CLK)
+        rol got
+        inx
+        cpx #4
+        bne @iec
+        lda #$07        ; alle Leitungen wieder loslassen
+        sta CIA2_PA
+        lda got
+        ldy #$E5        ; %11 10 01 01
+        ldx #(t_iec - text)
+        jsr report
+
         ; SID: volle Lautstärke, wie es das KERNAL beim Start einstellt. Das
         ; Register lässt sich nicht zurücklesen; die Testbench schaut nach,
         ; ob der Wert beim SID angekommen ist.
@@ -383,11 +421,14 @@ t_ram_e:    .byte "RAM $E000  ", 0
 t_port:     .byte "CPU-PORT   ", 0
 t_irq:      .byte "CIA-IRQ    ", 0
 t_nmi:      .byte "CIA-NMI    ", 0
+t_iec:      .byte "IEC-BUS    ", 0
 t_fail:     .byte "FEHLER $", 0
 t_ok:       .byte "OK"  ; läuft in t_eol weiter
 t_eol:      .byte $0D, $0A, 0
 hexdigits:  .byte "0123456789ABCDEF"
 t_screen:   .byte "DE25-NANO C64 TEXTMODUS", 0
+; Port A der CIA 2 für die vier Schritte des Bus-Tests
+iec_out:    .byte $07, $17, $27, $0F
 
 .segment "VECTORS"
         .word nmi       ; $FFFA NMI
