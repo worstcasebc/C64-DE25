@@ -1,0 +1,513 @@
+diff --git a/original/c1541_direct_gcr.sv b/angepasst/c1541_direct_gcr.sv
+index f20f097..30f26f5 100644
+--- a/original/c1541_direct_gcr.sv
++++ b/angepasst/c1541_direct_gcr.sv
+@@ -40,18 +40,29 @@ module c1541_direct_gcr
+ 	input        sd_buff_wr
+ );
+ 
++reg  [15:0] buff_addr;
++reg   [7:0] buff_di;
++wire        buff_do;
++reg         buff_we;
++wire  [7:0] sd_buff_do;
++reg   [9:0] shreg;              // UD2 74LS164, UE4A+UE4B 74LS74 (UC1)
++reg   [3:0] UF4_enc_phase_cnt;  // 74LS193 (UC1)
++reg   [2:0] UE3_bit_cnt;        // 74LS191 (UC1)
++reg         ht;                 // data to head
++reg  [12:0] track_len, track_new, len_valid;
++wire [12:0] track_len_adj;
++reg signed [9:0]  wbl_offset;
++
+ assign we          = buff_we;
+ assign sd_buff_din = (sd_buff_addr >= track_len_adj + 2) ? 8'hFF : sd_buff_do;
+ assign dout        = shreg[7:0];
+ 
+-reg [12:0] track_len, track_new, len_valid;
+ always @(posedge sd_clk) if(sd_buff_wr && !sd_buff_addr[13:1]) begin
+ 	// size and possible flags
+ 	if(sd_buff_addr[0] == 0) track_new[7:0]  <= sd_buff_dout;
+ 	if(sd_buff_addr[0] == 1) track_new[12:8] <= sd_buff_dout[4:0];
+ end
+ 
+-wire [7:0] sd_buff_do;
+ iecdrv_bitmem #(13) buffer
+ (
+ 	.clock_a(sd_clk),
+@@ -67,11 +78,6 @@ iecdrv_bitmem #(13) buffer
+ 	.q_b(buff_do)
+ );
+ 
+-reg  [15:0] buff_addr;
+-reg   [7:0] buff_di;
+-wire        buff_do;
+-reg         buff_we;
+-
+ wire [30:0] random_data;
+ random lfsr(
+    .clock(clk),
+@@ -84,15 +90,11 @@ random lfsr(
+ // which are referenced by their 1540 designations
+ assign sync_n = ~&shreg | ~mode;                               // UC2  (UC1)
+ assign byte_n = ~&UE3_bit_cnt | &shreg | UF4_enc_phase_cnt[1]; // UF3C (UC1) (soe: c1541_logic)
+-reg  [9:0] shreg;              // UD2 74LS164, UE4A+UE4B 74LS74 (UC1)
+-reg  [3:0] UF4_enc_phase_cnt;  // 74LS193 (UC1)
+ reg  [3:0] UE6_enc_clk_cnt;    // 74LS193
+-reg  [2:0] UE3_bit_cnt;        // 74LS191 (UC1)
+ reg  [2:0] UD3_bit_cnt_w;      // 74LS165 (UC1)
+ reg  [5:0] UD4A_cnt;           // 9602
+ reg  [8:0] flux_cnt;
+ reg        hf;                 // data from head
+-reg        ht;                 // data to head
+ 
+ // clks per bitcell in relation to track length:
+ // = (CLK_FREQ / (8 * (BASE_RPM/60))) / track_len
+@@ -103,8 +105,8 @@ localparam        CLK_FREQ         =  16_000_000;
+ localparam        BASE_ROT_TARGET  =     400_000;
+ localparam        WBL_FREQ         =          43; // WPM* 10
+ localparam        WBL_MAX          =          21; // RPM*100
+-localparam        WBL_CLKS_PER_STP = (((CLK_FREQ/(4*WBL_MAX_OFFSET)) * 600) / WBL_FREQ);
+ localparam signed WBL_MAX_OFFSET   = ((BASE_ROT_TARGET/ 100) * WBL_MAX)/BASE_RPM;
++localparam        WBL_CLKS_PER_STP = (((CLK_FREQ/(4*WBL_MAX_OFFSET)) * 600) / WBL_FREQ);
+ 
+ wire [18:0] base_rot_targets[8] = '{19'd400_000, 19'd398_671, 19'd397_351, 19'd393_443,
+                                     19'd387_097, 19'd406_780, 19'd402_685, 19'd401_338};
+@@ -112,14 +114,11 @@ wire [18:0] base_rot_targets[8] = '{19'd400_000, 19'd398_671, 19'd397_351, 19'd3
+ wire       [19:0] rot_target = $signed({1'b0, base_rot_targets[drive_rpm]}) + (drive_wobble ? wbl_offset : 10'sd0);
+ reg        [19:0] rot_clk_cnt;
+ reg        [31:0] wbl_step_cnt;
+-reg signed [9:0]  wbl_offset;
+ reg               wbl_dir;
+ 
+ // use len_valid as proxy for empty (half) tracks
+ wire [12:0] track_new_adj = (track_new > 'd6000) ? track_new : len_valid;
+-wire [12:0] track_len_adj = (track_len > 'd6000) ? track_len : len_valid;
+-wire [13:0] recip = rec[track_len_adj-6000];
+-
++assign      track_len_adj = (track_len > 'd6000) ? track_len : len_valid;
+ // precalc reciprocals for track_len_adj = 6000 .. 8047
+ reg  [13:0] rec[0:2047];
+ initial begin
+@@ -129,6 +128,8 @@ initial begin
+ 	end
+ end
+ 
++wire [13:0] recip = rec[track_len_adj-6000];
++
+ always @(posedge clk) begin
+ 	buff_we <= 0;
+ 
+diff --git a/original/c1541_drv.sv b/angepasst/c1541_drv.sv
+index 6354de1..7ece5f3 100644
+--- a/original/c1541_drv.sv
++++ b/angepasst/c1541_drv.sv
+@@ -70,15 +70,25 @@ module c1541_drv
+ 	input         sd_buff_wr
+ );
+ 
++wire        act;
++wire        sd_busy;
++wire        busy;
++wire  [7:0] gcr_di;
++wire  [7:0] gcr_do, gcr_sd_buff_dout;
++wire        gcr_sync_n, gcr_byte_n, gcr_we;
++wire  [7:0] dgcr_do, dgcr_sd_buff_dout;
++wire        dgcr_sync_n, dgcr_byte_n, dgcr_we;
++reg   [6:0] track;
++reg         save_track = 0;
++reg         present = 0;
++
+ assign led = act | sd_busy;
+ 
+ reg        readonly = 0;
+ reg        disk_present = 0;
+ reg [24:0] ch_timeout;
++reg old_mounted;
+ always @(posedge clk) begin
+-	reg old_mounted;
+-	reg present = 0;
+-
+ 	if(ce && ch_timeout > 0) ch_timeout <= ch_timeout - 1'd1;
+ 	if(!ch_timeout) disk_present <= present;
+ 	disk_ready <= !ch_timeout;
+@@ -95,7 +105,6 @@ end
+ wire       mode; // read/write
+ wire [1:0] stp;
+ wire       mtr;
+-wire       act;
+ wire [1:0] freq;
+ wire       wps_n = ~readonly ^ ch_timeout[23];
+ 
+@@ -140,16 +149,11 @@ c1541_logic c1541_logic
+ 	.act(act)
+ );
+ 
+-wire  [7:0] gcr_di;
+ wire        we = gcr_mode ? dgcr_we : gcr_we;
+ assign      sd_buff_din = gcr_mode ? dgcr_sd_buff_dout : gcr_sd_buff_dout;
+ 
+-wire sd_busy;
+ iecdrv_sync busy_sync(clk, busy, sd_busy);
+ 
+-wire [7:0]  gcr_do, gcr_sd_buff_dout;
+-wire        gcr_sync_n, gcr_byte_n, gcr_we;
+-
+ c1541_gcr c1541_gcr
+ (
+ 	.clk(clk),
+@@ -175,9 +179,6 @@ c1541_gcr c1541_gcr
+ 	.sd_buff_wr(sd_ack & sd_buff_wr & ~gcr_mode)
+ );
+ 
+-wire [7:0] dgcr_do, dgcr_sd_buff_dout;
+-wire       dgcr_sync_n, dgcr_byte_n, dgcr_we;
+-
+ c1541_direct_gcr c1541_direct_gcr
+ (
+ 	.clk(clk),
+@@ -206,8 +207,6 @@ c1541_direct_gcr c1541_direct_gcr
+ 	.sd_buff_wr(sd_ack & sd_buff_wr & gcr_mode)
+ );
+ 
+-wire busy;
+-
+ c1541_track c1541_track
+ (
+ 	.clk(clk_sys),
+@@ -227,13 +226,10 @@ c1541_track c1541_track
+ 	.busy(busy)
+ );
+ 
+-reg [6:0] track;
+-reg       save_track = 0;
++reg       track_modified;
++reg [6:0] track_num;
++reg [1:0] move, stp_old;
+ always @(posedge clk) begin
+-	reg       track_modified;
+-	reg [6:0] track_num;
+-	reg [1:0] move, stp_old;
+-
+ 	track <= track_num;
+ 
+ 	stp_old <= stp;
+diff --git a/original/c1541_gcr.sv b/angepasst/c1541_gcr.sv
+index d07499c..ff89fb9 100644
+--- a/original/c1541_gcr.sv
++++ b/angepasst/c1541_gcr.sv
+@@ -38,6 +38,30 @@ module c1541_gcr
+ 	input             sd_buff_wr
+ );
+ 
++reg [12:0] buff_addr;
++wire [7:0] buff_do;
++reg  [7:0] buff_di;
++
++reg  [4:0] sector;
++reg        sync_in_n;
++reg        byte_in;
++reg  [8:0] byte_cnt;
++reg        nibble;
++reg        state;
++reg  [7:0] data_cks; 
++reg  [7:0] gcr_byte_out;
++reg  [4:0] gcr_nibble_out;
++reg  [7:0] hdr_cks;
++
++reg [7:0] id1=0, id2=0;
++
++wire [4:0] gcr_lut[16] = '{
++	5'b01010, 5'b11010, 5'b01001, 5'b11001,
++	5'b01110, 5'b11110, 5'b01101, 5'b11101,
++	5'b10010, 5'b10011, 5'b01011, 5'b11011,
++	5'b10110, 5'b10111, 5'b01111, 5'b10101
++};
++
+ assign sync_n = ~mtr | busy | sync_in_n;
+ 
+ wire [4:0] sector_max=	(track < 18) ? 5'd20 :
+@@ -63,14 +87,7 @@ wire [7:0] data_body=	(byte_cnt == 0)   ? 8'h07 :
+ wire [7:0] data = state ? data_body : data_header;
+ wire [4:0] gcr_nibble = gcr_lut[nibble ? data[3:0] : data[7:4]];
+ 
+-wire [4:0] gcr_lut[16] = '{
+-	5'b01010, 5'b11010, 5'b01001, 5'b11001,
+-	5'b01110, 5'b11110, 5'b01101, 5'b11101,
+-	5'b10010, 5'b10011, 5'b01011, 5'b11011,
+-	5'b10110, 5'b10111, 5'b01111, 5'b10101
+-};
+-
+-wire [3:0] nibble_out;
++reg  [3:0] nibble_out;
+ always_comb begin
+ 	case(gcr_nibble_out)
+ 		5'b01010: nibble_out = 'h0;
+@@ -94,10 +111,9 @@ end
+ 
+ reg       bit_clk_en;
+ reg [5:0] old_track;
++reg [5:0] bit_clk_cnt;
++reg       mode_r1;
+ always @(posedge clk) begin
+-	reg [5:0] bit_clk_cnt;
+-	reg       mode_r1;
+-
+ 	bit_clk_en <= 0;
+ 
+ 	if(ce) begin
+@@ -120,7 +136,6 @@ always @(posedge clk) begin
+ 	end
+ end
+ 
+-reg [7:0] id1=0, id2=0;
+ always @(posedge sd_clk) begin
+ 	if(sd_lba == 357 && sd_buff_wr) begin
+ 		if(sd_buff_addr == 'hA2) id1 <= sd_buff_dout;
+@@ -143,30 +158,14 @@ iecdrv_mem #(8,13) buffer
+ 	.q_b(buff_do)
+ );
+ 
+-reg [12:0] buff_addr;
+-wire [7:0] buff_do;
+-reg  [7:0] buff_di;
+-
+-reg  [4:0] sector;
+-reg        sync_in_n;
+-reg        byte_in;
+-reg  [8:0] byte_cnt;
+-reg        nibble;
+-reg        state;
+-reg  [7:0] data_cks; 
+-reg  [7:0] gcr_byte_out;
+-reg  [4:0] gcr_nibble_out;
+-reg  [7:0] hdr_cks;
+-
++reg       mode_r2;
++reg       autorise_write;
++reg       autorise_count;
++reg [5:0] sync_cnt;
++reg [7:0] gcr_byte;
++reg [2:0] bit_cnt;
++reg [3:0] gcr_bit_cnt;
+ always @(posedge clk) begin
+-	reg       mode_r2;
+-	reg       autorise_write;
+-	reg       autorise_count;
+-	reg [5:0] sync_cnt;
+-	reg [7:0] gcr_byte;
+-	reg [2:0] bit_cnt;
+-	reg [3:0] gcr_bit_cnt;
+-
+ 	hdr_cks <= track ^ sector ^ id1 ^ id2;
+ 	we <= 0;
+ 
+diff --git a/original/c1541_logic.sv b/angepasst/c1541_logic.sv
+index eb7295f..305ea1f 100644
+--- a/original/c1541_logic.sv
++++ b/angepasst/c1541_logic.sv
+@@ -48,6 +48,14 @@ module c1541_logic
+ 	output       act			   // activity LED
+ );
+ 
++wire [23:0] cpu_a;
++wire  [7:0] cpu_do;
++wire        cpu_rw;
++wire  [7:0] ram_do, extram_do, uc1_do, uc3_do;
++wire        uc1_irq, uc3_irq;
++wire        extram_cs;
++wire        soe;
++
+ assign rom_addr = cpu_a[14:0];
+ 
+ //same decoder as on real HW
+@@ -66,9 +74,6 @@ wire  [7:0] cpu_di =
+ 	 rom_cs    ? rom_data :
+ 	 8'hFF;
+ 
+-wire [23:0] cpu_a;
+-wire  [7:0] cpu_do;
+-wire        cpu_rw;
+ wire        cpu_irq_n = ~(uc1_irq | uc3_irq);
+ wire        cpu_so_n = byte_n | ~soe;
+ 
+@@ -89,9 +94,8 @@ T65 cpu
+ 	.DO(cpu_do)
+ );
+ 
+-wire extram_cs = ext_en && (cpu_a[15:13] == 'b100);
++assign extram_cs = ext_en && (cpu_a[15:13] == 'b100);
+ 
+-wire [7:0] extram_do;
+ iecdrv_mem #(8,13) extram
+ (
+ 	.clock_a(clk),
+@@ -104,7 +108,6 @@ iecdrv_mem #(8,13) extram
+ 	.q_b(extram_do)
+ );
+ 
+-wire [7:0] ram_do;
+ iecdrv_mem #(8,11) ram
+ (
+ 	.clock_a(clk),
+@@ -118,8 +121,6 @@ iecdrv_mem #(8,11) ram
+ );
+ 
+ // UC1 (VIA6522) signals
+-wire [7:0] uc1_do;
+-wire       uc1_irq;
+ wire [7:0] uc1_pa_o;
+ wire [7:0] uc1_pa_oe;
+ wire       uc1_ca2_o;
+@@ -177,8 +178,6 @@ iecdrv_via6522 uc1
+ 
+ 
+ // UC3 (VIA6522) signals
+-wire [7:0] uc3_do;
+-wire       uc3_irq;
+ wire [7:0] uc3_pa_o;
+ wire [7:0] uc3_pa_oe;
+ wire       uc3_ca2_o;
+@@ -190,7 +189,7 @@ wire       uc3_cb1_oe;
+ wire       uc3_cb2_o;
+ wire       uc3_cb2_oe;
+ 
+-wire       soe  = uc3_ca2_o | ~uc3_ca2_oe;
++assign     soe  = uc3_ca2_o | ~uc3_ca2_oe;
+ assign     dout = uc3_pa_o  | ~uc3_pa_oe;
+ assign     mode = uc3_cb2_o | ~uc3_cb2_oe;
+ 
+diff --git a/original/c1541_multi.sv b/angepasst/c1541_multi.sv
+index 9541f99..666c7f3 100644
+--- a/original/c1541_multi.sv
++++ b/angepasst/c1541_multi.sv
+@@ -8,7 +8,9 @@
+ //-------------------------------------------------------------------------------
+ 
+ 
+-module c1541_multi #(parameter PARPORT=1,DUALROM=1,DRIVES=2)
++module c1541_multi #(parameter PARPORT=1,DUALROM=1,DRIVES=2,
++	localparam NDR = (DRIVES < 1) ? 1 : (DRIVES > 4) ? 4 : DRIVES,
++	localparam N   = NDR - 1)
+ (
+ 	//clk ports
+ 	input         clk,
+@@ -36,7 +38,7 @@ module c1541_multi #(parameter PARPORT=1,DUALROM=1,DRIVES=2)
+ 	// parallel bus
+ 	input   [7:0] par_data_i,
+ 	input         par_stb_i,
+-	output  [7:0] par_data_o,
++	output reg [7:0] par_data_o,
+ 	output        par_stb_o,
+ 
+ 	//clk_sys ports
+@@ -58,9 +60,6 @@ module c1541_multi #(parameter PARPORT=1,DUALROM=1,DRIVES=2)
+ 	input         rom_std
+ );
+ 
+-localparam NDR = (DRIVES < 1) ? 1 : (DRIVES > 4) ? 4 : DRIVES;
+-localparam N   = NDR - 1;
+-
+ wire iec_atn, iec_data, iec_clk;
+ iecdrv_sync atn_sync(clk, iec_atn_i,  iec_atn);
+ iecdrv_sync dat_sync(clk, iec_data_i, iec_data);
+@@ -73,10 +72,9 @@ wire stdrom = (DUALROM || PARPORT) ? rom_std : 1'b1;
+ 
+ reg ph2_r;
+ reg ph2_f;
++reg [3:0] div;
++reg       ena, ena1;
+ always @(posedge clk) begin
+-	reg [3:0] div;
+-	reg       ena, ena1;
+-
+ 	ena1 <= ~pause;
+ 	if(div[2:0]) ena <= ena1;
+ 
+@@ -89,18 +87,22 @@ always @(posedge clk) begin
+ 	end
+ end
+ 
++reg rom_32k_i;
++reg rom_16k_i;
++
+ initial begin
+ 	rom_32k_i = 1;
+ 	rom_16k_i = 1;
+ end
+ 
+-reg rom_32k_i;
+-reg rom_16k_i;
+ always @(posedge clk_sys) if (rom_wr & |rom_data & ~&rom_data) {rom_32k_i,rom_16k_i} <= rom_addr[14:13];
+ 
+ reg [1:0] rom_sz;
+ always @(posedge clk) rom_sz <= {rom_32k_i,rom_32k_i|rom_16k_i}; // support for 8K/16K/32K ROM
+ 
++reg  [14:0] mem_a;
++wire [7:0] romstd_do;
++
+ wire [7:0] rom_do;
+ generate
+ 	if(PARPORT) begin
+@@ -134,8 +136,7 @@ generate
+ 	end
+ endgenerate
+ 
+-wire [7:0] romstd_do;
+-iecdrv_mem #(8,14,"rtl/iec_drive/c1541_rom.mif") romstd
++iecdrv_mem #(8,14,"../sw/asm/build/c1541_rom.mif") romstd
+ (
+ 	.clock_a(clk_sys),
+ 	.address_a(rom_addr[13:0]),
+@@ -147,13 +148,10 @@ iecdrv_mem #(8,14,"rtl/iec_drive/c1541_rom.mif") romstd
+ 	.q_b(romstd_do)
+ );
+ 
+-reg  [14:0] mem_a;
+ wire [14:0] drv_addr[NDR];
+ reg   [7:0] drv_data[4];
++reg [2:0] state;
+ always @(posedge clk) begin
+-	reg [2:0] state;
+-	reg [14:0] mem_d;
+-	
+ 	if(~&state) state <= state + 1'd1;
+ 	if(ph2_f)   state <= 0;
+ 
+diff --git a/original/c1541_track.sv b/angepasst/c1541_track.sv
+index 6a09187..c6ec696 100644
+--- a/original/c1541_track.sv
++++ b/angepasst/c1541_track.sv
+@@ -37,6 +37,9 @@ module c1541_track
+ 	output reg    busy
+ );
+ 
++reg [31:0] lba;
++reg  [9:0] len;
++
+ assign sd_lba     = lba;
+ assign sd_blk_cnt = gcr_mode ? 6'h1F : len[5:0];
+ 
+@@ -54,16 +57,15 @@ wire [9:0] start_sectors[41] =
+   768
+ };
+ 
+-reg [31:0] lba;
+-reg  [9:0] len;
++reg  [6:0] cur_track = 0;
++reg        update = 0;
++reg        saving = 0, initing = 0;
++reg        old_save_track = 0;
++reg  [6:0] track_new;
++reg        old_change;
++reg        old_ack;
+ 
+ always @(posedge clk) begin
+-	reg  [6:0] cur_track = 0;
+-	reg  [6:0] track_new;
+-	reg        old_change, update = 0;
+-	reg        saving = 0, initing = 0;
+-	reg        old_save_track = 0;
+-	reg        old_ack;
+ 
+ 	// delay track change after sync, so make sure save_track comes first.
+ 	track_new <= gcr_mode ? track_s : track_s[6:1];

@@ -12,7 +12,13 @@ Normalerweise läuft Icarus. Icarus kann aber kein VHDL und liest hier kein
 SystemVerilog; Testbenches, die CPU oder VIC-II (rtl/**/*.vhd) oder den SID
 aus MiSTer (rtl/**/*.sv) brauchen, tragen deshalb die Zeile
 "// Simulator: Questa" und laufen über Questa (im Quartus-Paket enthalten),
-das alle drei Sprachen gemeinsam simuliert.
+das alle drei Sprachen gemeinsam simuliert. Eine Zeile
+"// Questa-Optionen: ..." in der Testbench gibt Schalter an den Optimierer von
+Questa weiter, etwa "+initreg+0", damit Register bei 0 statt unbestimmt
+beginnen (nötig für Fremdcode, der sich auf den Startwert im FPGA verlässt).
+
+Testbenches mit der Zeile "// Laufzeit: lang" brauchen Minuten. Sie laufen
+nur, wenn man sie beim Namen nennt, nicht beim Aufruf ohne Namen.
 """
 import argparse
 import shutil
@@ -25,6 +31,8 @@ BUILD = ROOT / "tb" / "build"
 ICARUS_DIR = Path(r"C:\iverilog")  # Standardpfad des Windows-Installers
 QUESTA_DIR = Path(r"C:\altera_pro\26.1\questa_fse\win64")
 QUESTA_MARKER = "// Simulator: Questa"
+QUESTA_OPTIONS = "// Questa-Optionen:"
+LONG_MARKER = "// Laufzeit: lang"
 # Die VHDL-Bibliotheken warnen bei jedem Vergleich mit einem noch unbestimmten
 # Wert. Beim VIC-II sind das Millionen Zeilen, solange Register unbeschrieben
 # sind (wie beim echten Chip nach dem Einschalten) — deshalb abgeschaltet.
@@ -82,9 +90,13 @@ def run_tb_questa(name: str, rtl: list[str], helpers: list[str], plusargs: tuple
             print(step.stdout + step.stderr)
             return False
 
+    source = (ROOT / "tb" / f"{name}.v").read_text(encoding="utf-8")
+    options = [ln.split(QUESTA_OPTIONS, 1)[1].strip() for ln in source.splitlines() if QUESTA_OPTIONS in ln]
+    voptargs = [f"-voptargs={' '.join(options)}"] if options else []
+
     sim = subprocess.run(
         [tool["vsim"], "-c", "-quiet", "-lib", lib, "-l", f"{rel}/transcript",
-         "-wlf", f"{rel}/vsim.wlf", name, *plusargs, "-do", QUESTA_DO],
+         "-wlf", f"{rel}/vsim.wlf", *voptargs, name, *plusargs, "-do", QUESTA_DO],
         cwd=ROOT, capture_output=True, text=True,
     )
     output = sim.stdout + sim.stderr
@@ -132,7 +144,13 @@ def main() -> int:
     # Die ROM-Abbilder werden von tb_soc_c64/tb_c64_video (und Quartus) gelesen.
     if subprocess.run([sys.executable, str(ROOT / "sw" / "py" / "build_rom.py")], cwd=ROOT).returncode != 0:
         return 1
-    names = args.testbench or [p.stem for p in sorted((ROOT / "tb").glob("tb_*.v"))]
+    names = args.testbench
+    if not names:
+        every = sorted((ROOT / "tb").glob("tb_*.v"))
+        skipped = [p.stem for p in every if LONG_MARKER in p.read_text(encoding="utf-8")]
+        names = [p.stem for p in every if p.stem not in skipped]
+        if skipped:
+            print(f"Ausgelassen (Laufzeit lang, einzeln starten): {', '.join(skipped)}")
 
     failed = [n for n in names if not run_tb(n)]
 

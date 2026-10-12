@@ -52,3 +52,6 @@ quartus_hps/**
 rtl/video/vendor/fpga64/*.vhd
 rtl/audio/vendor/mister_sid/*.sv
 rtl/io/vendor/mister_cia/*.sv
+rtl/drive/vendor/mister_c1541/*.sv
+rtl/drive/vendor/mister_c1541/*.vhd
+rtl/drive/vendor/mister_c1541/*.v
