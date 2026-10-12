@@ -10,6 +10,7 @@
 //                     PLL läuft
 //           LEDR[3:1] nur mit HPS: von Linux aus schaltbar (Register
 //                     led_pio), als Nachweis, dass die Brücke zum FPGA läuft
+//           LEDR[4]   Leuchte des Diskettenlaufwerks 1541
 //           übrige LEDs aus. Zum Fehlersuchen stehen intern Signale bereit,
 //                     siehe unten in "LEDs".
 //           FPGA_UART_TX  Textausgabe des 6502-Programms, 115200 Baud 8N1,
@@ -258,6 +259,13 @@ module de25_nano_top #(
     wire       vic_vblank;
     wire [17:0] sid_audio;
     wire        cpu_tick;
+    // Serieller Bus: je Leitung, was der C64 und was das Laufwerk darauf gibt
+    // (0 = zieht). ATN gibt nur der C64.
+    wire        iec_atn;
+    wire        iec_clk_c64;
+    wire        iec_data_c64;
+    wire        iec_clk_drive;
+    wire        iec_data_drive;
 
     soc_c64 #(
         .BASIC_FILE        (BASIC_FILE),
@@ -271,11 +279,11 @@ module de25_nano_top #(
         .uart_txd   (FPGA_UART_TX),
         .keys       (keys),
         .restore    (hps_restore_q),
-        .iec_atn_o  (),             // serieller Bus: noch kein Laufwerk
-        .iec_clk_o  (),
-        .iec_data_o (),
-        .iec_clk_i  (1'b1),
-        .iec_data_i (1'b1),
+        .iec_atn_o  (iec_atn),
+        .iec_clk_o  (iec_clk_c64),
+        .iec_data_o (iec_data_c64),
+        .iec_clk_i  (iec_clk_drive),
+        .iec_data_i (iec_data_drive),
         .dma_req    (dma_req),
         .dma_addr   (dma_addr),
         .dma_data   (dma_data),
@@ -286,6 +294,37 @@ module de25_nano_top #(
         .vic_vblank (vic_vblank),
         .sid_audio  (sid_audio),
         .cpu_tick   (cpu_tick)
+    );
+
+    // --- Diskettenlaufwerk 1541 ---------------------------------------------
+    // Hängt wie beim echten C64 am seriellen Bus und wird mit dem Rechner
+    // zurückgesetzt. Eine Diskette gibt es noch nicht: Die Anforderungen des
+    // Laufwerks (sd_rd) beantwortet niemand, deshalb bleibt seine Leuchte an
+    // und jeder Zugriff endet mit einem Fehler des Laufwerks.
+    wire drive_led;
+
+    drive_1541 u_drive_1541 (
+        .clk          (clk_sys),
+        .rst          (rst),
+        .iec_atn_i    (iec_atn),
+        .iec_clk_i    (iec_clk_c64),
+        .iec_data_i   (iec_data_c64),
+        .iec_clk_o    (iec_clk_drive),
+        .iec_data_o   (iec_data_drive),
+        .led          (drive_led),
+        .img_mounted  (1'b0),
+        .img_readonly (1'b0),
+        .img_size     (32'd0),
+        .gcr_mode     (1'b0),
+        .sd_lba       (),
+        .sd_blk_cnt   (),
+        .sd_rd        (),
+        .sd_wr        (),
+        .sd_ack       (1'b0),
+        .sd_buff_addr (14'd0),
+        .sd_buff_dout (8'd0),
+        .sd_buff_din  (),
+        .sd_buff_wr   (1'b0)
     );
 
     // --- Ton: SID -> Mittelwert -> I2S zum HDMI-Sender ----------------------
@@ -560,10 +599,11 @@ module de25_nano_top #(
     // --- LEDs ---------------------------------------------------------------
     // Interne Sicht: 1 = LED an. LED 0 ist der Herzschlag, LED 1 bis 3
     // schaltet Linux (nur mit HPS). hps_led gehört zur Domäne clk_100 und
-    // geht ohne Synchronizer hinaus: Es ist nur fürs Auge.
+    // geht ohne Synchronizer hinaus: Es ist nur fürs Auge. LED 4 ist die
+    // Leuchte des Laufwerks.
     // Zum Fehlersuchen bieten sich an: hdmi_ready_q, hdmi_nack_q,
     // key_fifo_full, typer_busy, loader_active, rst.
-    wire [7:0] led = {4'b0, hps_led, heartbeat_q};
+    wire [7:0] led = {3'b0, drive_led, hps_led, heartbeat_q};
 
     assign LEDR = ~led;
 

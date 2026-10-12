@@ -42,21 +42,24 @@ Die Hülle `iec_drive.sv` und die 1581 werden nicht benutzt.
 - **Blockgröße:** 256 Bytes. Bei `.D64` ist `sd_lba` die Nummer des ersten
   Sektors der Spur, gezählt über die ganze Diskette; `sd_blk_cnt + 1` ist die
   Zahl der Sektoren der Spur.
-- **ROM:** Der Core lädt sein ROM aus einer `.mif`-Datei, deren Pfad im
-  Quelltext steht. Er zeigt hier auf `../sw/asm/build/c1541_rom.mif`
-  (relativ zum Quartus-Projekt); `sw/py/build_rom.py` erzeugt die Datei aus
-  `roms/dos1541-325302-01+901229-05.bin`. In der Simulation wirkt diese
-  Angabe nicht; dort lädt die Testbench das ROM selbst.
+- **ROM:** Der Pfad der ROM-Datei steht im Quelltext. Er zeigt hier auf
+  `../sw/asm/build/c1541_rom.hex` (relativ zum Quartus-Projekt);
+  `sw/py/build_rom.py` erzeugt die Datei aus
+  `roms/dos1541-325302-01+901229-05.bin`. In der Simulation passt dieser
+  Pfad nicht (Questa meldet, dass es die Datei nicht findet); dort lädt die
+  Testbench das ROM selbst.
 - **Startwerte:** Einige Register werden nie zurückgesetzt und verlassen sich
   darauf, dass sie im FPGA bei 0 beginnen. In der Simulation braucht es dafür
   die Questa-Schalter `+initreg+0 +initmem+0` (stehen in der Testbench).
 
 ## Ausnahme von der Regel „Fremdcode unverändert"
 
-Sechs der neun Dateien sind gegenüber dem Original geändert (`iecdrv_misc.sv`,
-`iecdrv_via6522.vhd` und `lfsr.v` nicht). MiSTer baut mit der älteren
-Quartus-Standard-Reihe, die über Formfehler hinwegsieht; Quartus Pro und
-Questa lehnen das Original ab. Geändert wurde die Form, nicht die Funktion:
+Sieben der neun Dateien sind gegenüber dem Original geändert
+(`iecdrv_via6522.vhd` und `lfsr.v` nicht). MiSTer baut mit der älteren
+Quartus-Standard-Reihe für den Cyclone V, die über Formfehler hinwegsieht;
+Quartus Pro und Questa lehnen das Original ab.
+
+Zuerst die Änderungen, die nur die Form betreffen, nicht die Funktion:
 
 - Deklarationen stehen jetzt vor ihrer ersten Verwendung. Dafür sind sie in
   allen sechs Dateien nach oben gerückt; aus `wire x = ...;` weiter unten
@@ -72,8 +75,35 @@ Questa lehnen das Original ab. Geändert wurde die Form, nicht die Funktion:
 - `c1541_direct_gcr.sv`: Zwei Konstanten und eine Tabelle stehen in der
   Reihenfolge, in der sie einander brauchen.
 
-Eine Änderung betrifft nicht die Form: der Pfad der ROM-Datei in
-`c1541_multi.sv` (siehe oben).
+Drei Änderungen gehen über die Form hinaus. Alle drei betreffen die Speicher
+in `iecdrv_misc.sv` und sind nötig, damit Quartus Pro sie für den Agilex 5
+als Block-RAM umsetzt:
+
+- **Vorbelegung:** Im Original trägt jeder Speicher das Attribut
+  `ram_init_file`; bei Speichern ohne Vorbelegung steht dort ein einzelnes
+  Leerzeichen. Daran stürzt die Synthese von Quartus Pro 26.1 ab
+  (`Assertion failed: required_unc_path_size != 0`). Jetzt lädt ein
+  `$readmemh` den Inhalt, und nur dort, wo ein Dateiname angegeben ist. Dazu
+  gehört der geänderte Pfad der ROM-Datei in `c1541_multi.sv` (`.hex` statt
+  `.mif`).
+- **Gleichzeitiges Lesen und Schreiben:** Die Speicher tragen das Attribut
+  `ramstyle = "no_rw_check"`. Es sagt Quartus, dass es egal ist, was ein
+  Anschluss liest, während der andere im selben Takt dieselbe Adresse
+  schreibt. Ohne das baut Quartus den Spurpuffer aus 65.000 einzelnen
+  Registern. Das Laufwerk verlässt sich auf diesen Fall nicht: Die Seite der
+  Diskette liest nicht, solange Blöcke geliefert werden.
+- **`iecdrv_bitmem` neu aufgebaut:** Das Original ist ein Byte-Speicher, in
+  dem der zweite Anschluss einzelne Bits liest und schreibt. Das setzt
+  Quartus Pro nicht als Block-RAM um. Jetzt sind es acht Ein-Bit-Speicher
+  (`iecdrv_mem`), einer je Bitstelle; der zweite Anschluss wählt einen davon
+  aus. Verhalten und Verzögerung an den Anschlüssen sind gleich. Der neuere
+  Stand von MiSTer baut seinen 64-Bit-Puffer nach demselben Muster. Betroffen
+  ist nur der Puffer für `.G64`; simuliert ist dieser Weg noch nicht.
+
+Mit diesen Änderungen braucht das Laufwerk rund 2.000 ALMs und 11 Block-RAMs
+(ohne sie: 363 % des FPGA). Eine Tabelle in `c1541_direct_gcr.sv` (`rec`,
+2048 Einträge) wird weiterhin aus Logik gebaut; das ist in den 2.000 ALMs
+enthalten.
 
 Alle Änderungen stehen als Unterschied zum Original in `quartus_pro.patch`.
 

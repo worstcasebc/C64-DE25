@@ -43,6 +43,17 @@ set_global_assignment -name VERILOG_FILE ../rtl/mem/rom_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/ram_dp_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/rom_dp_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/fifo_sync.v
+set_global_assignment -name VERILOG_FILE ../rtl/drive/ce_fraction.v
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/drive/drive_1541.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/drive/vendor/mister_c1541/c1541_multi.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/drive/vendor/mister_c1541/c1541_drv.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/drive/vendor/mister_c1541/c1541_logic.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/drive/vendor/mister_c1541/c1541_track.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/drive/vendor/mister_c1541/c1541_gcr.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/drive/vendor/mister_c1541/c1541_direct_gcr.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/drive/vendor/mister_c1541/iecdrv_misc.sv
+set_global_assignment -name VHDL_FILE ../rtl/drive/vendor/mister_c1541/iecdrv_via6522.vhd
+set_global_assignment -name VERILOG_FILE ../rtl/drive/vendor/mister_c1541/lfsr.v
 
 # --- Takt (Tabelle 3-6) ----------------------------------------------------
 set_location_assignment PIN_DJ35 -to CLOCK0_50

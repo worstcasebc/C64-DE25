@@ -14,8 +14,7 @@ Die Original-ROMs des C64 sind urheberrechtlich geschützt und liegen nur
 lokal in roms/ (siehe C64_ROMS). Sind sie vorhanden, entstehen daraus
 c64_basic.hex, c64_chargen.hex und c64_kernal.hex; fehlende werden mit
 einem Hinweis übersprungen. Dasselbe gilt für das ROM des Laufwerks 1541:
-Aus ihm entstehen c1541_rom.hex (für die Simulation) und c1541_rom.mif (das
-Format, das der Laufwerks-Core aus MiSTer für Quartus erwartet).
+Aus ihm entsteht c1541_rom.hex.
 """
 import shutil
 import subprocess
@@ -42,20 +41,10 @@ C64_ROMS = {
     "c1541_rom": ("dos1541-325302-01+901229-05.bin", 0x4000),
 }
 
-# ROMs, die zusätzlich als .mif gebraucht werden
-MIF_ROMS = {"c1541_rom"}
-
 
 def write_hex(hex_file: Path, data: bytes) -> None:
     hex_file.write_text("".join(f"{b:02X}\n" for b in data))
 
-
-def write_mif(mif_file: Path, data: bytes) -> None:
-    """Memory Initialization File von Quartus: Kopf, dann Adresse : Wert."""
-    lines = [f"DEPTH = {len(data)};", "WIDTH = 8;", "ADDRESS_RADIX = HEX;",
-             "DATA_RADIX = HEX;", "CONTENT BEGIN"]
-    lines += [f"{addr:04X} : {b:02X};" for addr, b in enumerate(data)]
-    mif_file.write_text("\n".join(lines) + "\nEND;\n")
 
 
 def convert_c64_roms() -> list[Path]:
@@ -72,9 +61,7 @@ def convert_c64_roms() -> list[Path]:
             sys.exit(f"roms/{rom_name} hat {len(data)} Bytes, erwartet {size}")
         write_hex(BUILD / f"{name}.hex", data)
         hex_files.append(BUILD / f"{name}.hex")
-        if name in MIF_ROMS:
-            write_mif(BUILD / f"{name}.mif", data)
-            hex_files.append(BUILD / f"{name}.mif")
+
     return hex_files
 
 

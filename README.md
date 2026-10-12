@@ -41,7 +41,9 @@ Not there yet:
 - Keyboard: a USB keyboard works through Linux on the HPS, in the HPS build
   only. Otherwise keystrokes come from a PC over
   the UART (see [Controlling the C64](#controlling-the-c64)).
-- No disk drive, so no `.D64` support, and no tape or cartridges.
+- Disks: a 1541 disk drive sits on the serial bus and answers the C64, but it
+  cannot be given a disk yet, so every access ends in an error of the drive.
+  `.D64` support is the next step. No tape or cartridges.
 - No joysticks.
 - PAL only.
 - A menu or file browser on the HPS.
@@ -54,6 +56,7 @@ Not there yet:
 | VIC-II | FPGA64 / MiSTer, `rtl/video/vendor/fpga64` |
 | SID | MiSTer, `rtl/audio/vendor/mister_sid` |
 | CIA 6526 (two) | MiSTer, `rtl/io/vendor/mister_cia` |
+| Disk drive 1541 | MiSTer (an older revision), `rtl/drive/vendor/mister_c1541`, wrapped in `rtl/drive/drive_1541.sv` |
 | Memory map, banking, HDMI output, I2S audio, UART, loader, top level | written for this project |
 
 The whole C64 runs in a single clock domain at 31.5 MHz. The VIC-II produces a
@@ -64,7 +67,7 @@ PAL picture, which is line-doubled and sent to the board's HDMI transmitter as
 
 ```
 rtl/            Verilog/VHDL modules, one file per module
-  cpu/ video/ audio/ mem/ io/
+  cpu/ video/ audio/ mem/ io/ drive/
   */vendor/     third-party cores, each with a README on origin and licence
                 (only the CPU is checked in, the others are fetched by script)
 tb/             testbenches (tb_<module>.v) and the simulation script
@@ -94,8 +97,9 @@ Windows-only.
 
 ### 1. Third-party cores
 
-The VIC-II, SID and CIA cores from MiSTer are not in this repository, because
-their licence situation is unclear. Fetch them once, from the repository root:
+The VIC-II, SID, CIA and 1541 disk drive cores from MiSTer are not in this
+repository, because their licence situation is unclear or requires sharing
+alike. Fetch them once, from the repository root:
 
 ```
 python sw/py/fetch_mister.py
@@ -103,8 +107,8 @@ python sw/py/fetch_mister.py
 
 The script downloads the files from the
 [MiSTer C64 core](https://github.com/MiSTer-devel/C64_MiSTer) at a fixed
-commit and applies the patches for SID and CIA that make them acceptable to
-Quartus Pro and Questa. It needs `git` and an internet connection. Simulation
+commit and applies the patches for SID, CIA and the disk drive that make them
+acceptable to Quartus Pro and Questa. It needs `git` and an internet connection. Simulation
 needs these files as well.
 
 ### 2. ROMs
@@ -117,6 +121,7 @@ this repository. Put your own copies into `roms/` under these names:
 | `basic-901226-01.bin` | 8192 bytes |
 | `chargen-901225-01.bin` | 4096 bytes |
 | `kernal-901227-03.bin` | 8192 bytes |
+| `dos1541-325302-01+901229-05.bin` (ROM of the 1541 disk drive) | 16384 bytes |
 
 Then convert them, from the repository root:
 
@@ -124,7 +129,8 @@ Then convert them, from the repository root:
 python sw/py/build_rom.py
 ```
 
-This writes `c64_basic.hex`, `c64_chargen.hex` and `c64_kernal.hex` to
+This writes `c64_basic.hex`, `c64_chargen.hex`, `c64_kernal.hex` and
+`c1541_rom.hex` to
 `sw/asm/build/`, where the Quartus projects expect them. The same call also
 assembles the project's own test ROMs (`banktest_*.hex`). Without the original
 ROMs you can enter those three files as the parameters `BASIC_FILE`,
@@ -189,7 +195,8 @@ python tb/run_sim.py tb_blink -w  and open the waveform in GTKWave
 ```
 
 Every testbench ends with `PASS: <name>`. The script picks Icarus or Questa
-per testbench.
+per testbench. The testbench of the disk drive (`tb_drive_1541`) takes about
+ten minutes and only runs when it is named.
 
 ## Controlling the C64
 
@@ -201,6 +208,7 @@ per testbench.
 | `SW0` | up: colour-bar test picture instead of the C64 picture |
 | `LEDR0` | 1 Hz heartbeat — blinks only while the PLL is running |
 | `LEDR1`–`LEDR3` | HPS build only: switched from Linux |
+| `LEDR4` | light of the 1541 disk drive (stays on as long as no disk can be supplied) |
 
 Picture and sound come out of the HDMI connector.
 
@@ -290,6 +298,9 @@ with different terms, described in the README next to each of them:
 - **SID** (`rtl/audio/vendor/mister_sid`): two files are under CERN-OHL-S v2,
   the others carry no licence notice. Not included; only the patch with this
   project's changes is.
+- **Disk drive 1541** (`rtl/drive/vendor/mister_c1541`): one file is under
+  LGPL 3, one under GPL 3, the others carry no licence notice. Not included;
+  only the patch is.
 - **CIA** (`rtl/io/vendor/mister_cia`) and **VIC-II**
   (`rtl/video/vendor/fpga64`): no licence notice in the files. Not included;
   for the CIA only the patch is.
@@ -298,7 +309,7 @@ with different terms, described in the README next to each of them:
   the header of Terasic's `golden_top.v`, use and modification are permitted
   for Terasic boards, redistribution beyond that is not. These files are
   therefore not included; see [Building](#building) for where to get them.
-- **C64 ROMs**: copyrighted, not included.
+- **C64 and 1541 ROMs**: copyrighted, not included.
 
 ## Acknowledgements
 
