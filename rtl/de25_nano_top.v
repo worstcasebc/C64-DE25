@@ -183,11 +183,16 @@ module de25_nano_top #(
     wire        rx_valid_q;
     wire [7:0]  hps_data_q;
     wire        hps_valid_q;
+    // Tasten kommen aus zwei Quellen, die beide dasselbe Gitter bedienen:
+    // die getippten Zeichen (typer_keys) und, mit HPS, die Tastatur an
+    // Linux (hps_keys_q). Gedrückt ist, was eine der beiden drückt.
+    wire [63:0] typer_keys;
+    wire [63:0] hps_keys_q;
     wire        key_fifo_empty;
     wire        key_fifo_full;
     wire [7:0]  key_fifo_data;
     wire        key_fifo_rd;
-    wire [63:0] keys;
+    wire [63:0] keys = typer_keys | hps_keys_q;
     wire        typer_busy;
     wire [7:0]  key_data;
     wire        key_valid;
@@ -241,7 +246,7 @@ module de25_nano_top #(
         .fifo_data  (key_fifo_data),
         .fifo_rd    (key_fifo_rd),
         .busy       (typer_busy),
-        .keys       (keys)
+        .keys       (typer_keys)
     );
 
     // --- Der C64 ------------------------------------------------------------
@@ -434,7 +439,7 @@ module de25_nano_top #(
         .d_sync_q (rst_av)
     );
 
-    wire [3:0]  c64_m0_address;     // in Bytes: 0 = DATA, 4 = STATUS
+    wire [3:0]  c64_m0_address;     // in Bytes; Bit 3..2 wählt das Register
     wire        c64_m0_write;
     wire [31:0] c64_m0_writedata;
     wire [3:0]  c64_m0_byteenable;
@@ -446,7 +451,7 @@ module de25_nano_top #(
     hps_byte_port u_hps_byte_port (
         .clk_av            (clk_100),
         .rst_av            (rst_av),
-        .avs_address       (c64_m0_address[2]),
+        .avs_address       (c64_m0_address[3:2]),
         .avs_write         (c64_m0_write),
         .avs_writedata     (c64_m0_writedata),
         .avs_byteenable    (c64_m0_byteenable),
@@ -458,7 +463,8 @@ module de25_nano_top #(
         .rst               (rst),
         .data_q            (hps_data_q),
         .valid_q           (hps_valid_q),
-        .ready             (hps_ready)
+        .ready             (hps_ready),
+        .keys_q            (hps_keys_q)
     );
 
     qsys_top u_qsys_top (
@@ -539,6 +545,7 @@ module de25_nano_top #(
     assign hps_led     = 3'b000;
     assign hps_data_q  = 8'h00;
     assign hps_valid_q = 1'b0;
+    assign hps_keys_q  = 64'd0;
 `endif
 
     // --- LEDs ---------------------------------------------------------------

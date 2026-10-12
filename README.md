@@ -38,13 +38,13 @@ keystrokes and load blocks that the PC sends over the UART.
 
 Not there yet:
 
-- Keyboard: no real keyboard is attached. Keystrokes come from a PC over the
-  UART or from a script on the HPS (see
-  [Controlling the C64](#controlling-the-c64)).
+- Keyboard: a USB keyboard works through Linux on the HPS, in the HPS build
+  only and without the RESTORE key. Otherwise keystrokes come from a PC over
+  the UART (see [Controlling the C64](#controlling-the-c64)).
 - No disk drive, so no `.D64` support, and no tape or cartridges.
 - No joysticks.
 - PAL only.
-- A menu or file browser on the HPS, and a USB keyboard.
+- A menu or file browser on the HPS.
 
 ### What is inside
 
@@ -256,6 +256,18 @@ sudo python3 c64_hps.py --load game.prg --run     load a program and type RUN
 
 The bytes go through a register at `0x2001_0100` into the same path as the
 bytes from the PC, so do not load from both sides at the same time.
+
+A USB keyboard at the board's USB host connector becomes the C64 keyboard
+with a third script, `sw/py/c64_keys.py`:
+
+```
+sudo python3 c64_keys.py
+```
+
+It passes on which keys are held down, so key combinations and games work.
+Keys are mapped by position, not by what is printed on them: the key right of
+`L` is the colon, as on a C64. Esc is RUN/STOP, Tab is CTRL, left Ctrl is the
+Commodore key; the full table is at the top of the script. RESTORE is missing.
 
 A second register, 3 bits at `0x2001_0080`, switches `LEDR1`–`LEDR3`:
 

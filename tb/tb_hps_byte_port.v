@@ -11,19 +11,27 @@
 //   5. 300 Bytes bei zufälligem ready: alle, in der Reihenfolge, keins doppelt.
 //   6. Reset des C64 mit wartendem Byte: Byte weg, Port frei, danach normal.
 //   7. readdatavalid genau einen Takt nach read; waitrequest nie 1.
+//   8. Nach dem Reset sind alle Tasten losgelassen.
+//   9. KEYS_LO und KEYS_HI: Der Zustand erscheint beim C64, Rücklesen stimmt,
+//      das jeweils andere Wort bleibt.
+//  10. Schreiben mit einzelnen Bytes (byteenable) ändert nur diese.
+//  11. Die Tastenregister liefern kein Byte im Datenstrom; ein Reset des C64
+//      lässt die Tasten stehen.
 
 `timescale 1ns / 1ps
 `default_nettype none
 
 module tb_hps_byte_port;
 
-    localparam DATA   = 1'b0;
-    localparam STATUS = 1'b1;
+    localparam [1:0] DATA    = 2'd0;
+    localparam [1:0] STATUS  = 2'd1;
+    localparam [1:0] KEYS_LO = 2'd2;
+    localparam [1:0] KEYS_HI = 2'd3;
     localparam N_RAND = 300;
 
     reg         clk_av = 1'b0;
     reg         rst_av = 1'b1;
-    reg         av_address = 1'b0;
+    reg  [1:0]  av_address = 2'd0;
     reg         av_write_r = 1'b0;
     reg  [31:0] av_writedata = 32'd0;
     reg  [3:0]  av_byteenable = 4'b0000;
@@ -37,6 +45,7 @@ module tb_hps_byte_port;
     wire [7:0]  data;
     wire        valid;
     reg         ready = 1'b0;
+    wire [63:0] keys;
     reg         rand_ready = 1'b0;
 
     integer     errors = 0;
@@ -61,7 +70,8 @@ module tb_hps_byte_port;
         .rst               (rst),
         .data_q            (data),
         .valid_q           (valid),
-        .ready             (ready)
+        .ready             (ready),
+        .keys_q            (keys)
     );
 
     always #5      clk_av = ~clk_av;   // 100 MHz
@@ -95,7 +105,7 @@ module tb_hps_byte_port;
         end
     endtask
 
-    task av_write(input addr, input [31:0] value, input [3:0] be);
+    task av_write(input [1:0] addr, input [31:0] value, input [3:0] be);
         begin
             @(negedge clk_av);
             av_address    = addr;
@@ -108,7 +118,7 @@ module tb_hps_byte_port;
     endtask
 
     // Liest ein Register und prüft dabei den Zeitpunkt von readdatavalid.
-    task av_read(input addr, output [31:0] value);
+    task av_read(input [1:0] addr, output [31:0] value);
         begin
             @(negedge clk_av);
             av_address = addr;
@@ -151,6 +161,7 @@ module tb_hps_byte_port;
         av_read(STATUS, rd);
         expect_eq(rd, 0, "STATUS nach Reset");
         expect_eq(valid, 0, "valid nach Reset");
+        expect_eq(keys === 64'd0, 1, "8. Tasten nach Reset");
 
         // 2. ein Byte, Abnehmer zunächst nicht bereit
         av_write(DATA, 32'h0000_0041, 4'b1111);
@@ -226,6 +237,35 @@ module tb_hps_byte_port;
         repeat (10) @(negedge clk);
         expect_eq(n_got, 3 + N_RAND, "Byte nach dem Reset");
         expect_eq(got[2 + N_RAND], 8'h66, "Wert nach dem Reset");
+
+        // 9. Tastenzustand schreiben und zurücklesen
+        av_write(KEYS_LO, 32'h8000_0001, 4'b1111);
+        repeat (4) @(negedge clk);
+        expect_eq(keys === 64'h0000_0000_8000_0001, 1, "9. KEYS_LO beim C64");
+        av_write(KEYS_HI, 32'hA000_0005, 4'b1111);
+        repeat (4) @(negedge clk);
+        expect_eq(keys === 64'hA000_0005_8000_0001, 1, "9. KEYS_HI beim C64");
+        av_read(KEYS_LO, rd);
+        expect_eq(rd === 32'h8000_0001, 1, "9. KEYS_LO zuruecklesen");
+        av_read(KEYS_HI, rd);
+        expect_eq(rd === 32'hA000_0005, 1, "9. KEYS_HI zuruecklesen");
+
+        // 10. nur einzelne Bytes
+        av_write(KEYS_LO, 32'hFFFF_FFFF, 4'b0100);
+        av_write(KEYS_HI, 32'h0000_0000, 4'b1000);
+        repeat (4) @(negedge clk);
+        expect_eq(keys === 64'h0000_0005_80FF_0001, 1, "10. einzelne Bytes");
+
+        // 11. kein Byte im Datenstrom, Reset des C64 laesst die Tasten stehen
+        repeat (6) @(negedge clk);
+        expect_eq(n_got, 3 + N_RAND, "11. Tasten liefern kein Byte");
+        av_read(STATUS, rd);
+        expect_eq(rd, 0, "11. frei nach Tastenschreiben");
+        rst = 1'b1;
+        repeat (4) @(negedge clk);
+        rst = 1'b0;
+        repeat (4) @(negedge clk);
+        expect_eq(keys === 64'h0000_0005_80FF_0001, 1, "11. Tasten nach Reset des C64");
 
         if (errors == 0) $display("PASS: tb_hps_byte_port");
         else             $display("FAIL: tb_hps_byte_port (%0d Fehler)", errors);
