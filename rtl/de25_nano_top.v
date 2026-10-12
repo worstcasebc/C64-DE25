@@ -29,8 +29,9 @@
 //         später, mitten im gültigen Bereich.
 //         Asynchrone Eingänge kommen nur über sync_2ff herein.
 //         Mit HPS gibt es eine zweite Domäne: clk_100 (100 MHz aus der PLL
-//         "pll" an CLOCK2_50) für die Brücken zwischen HPS und FPGA. Zwischen
-//         ihr und clk_sys läuft bisher kein Signal.
+//         "pll" an CLOCK2_50) für die Brücken zwischen HPS und FPGA. Von
+//         dort nach clk_sys führt genau ein Weg: hps_byte_port, über den
+//         Linux dieselben Bytes schickt wie der PC über FPGA_UART_RX.
 // Ports:  Namen wie im Terasic-Handbuch (Großschreibung nur hier im Top-Level).
 //         KEY und LEDR sind low-aktiv; intern wird alles high-aktiv geführt.
 // IP:     pll_c64 (50 MHz -> 2 x 31,5 MHz, 0 und 180 Grad) und reset_release
@@ -173,8 +174,15 @@ module de25_nano_top #(
     // Vom PC (115200 Baud) kommen Tastendrücke und Ladeblöcke. prg_loader
     // trennt sie: Tastendrücke warten in einer Schlange für 4096 Zeichen und
     // werden nacheinander getippt, Ladedaten gehen direkt ins RAM.
+    // Mit HPS kommen dieselben Bytes auch von Linux (hps_byte_port, siehe
+    // unten bei "HPS"). Beide Quellen münden in einen Strom: Der UART hat
+    // Vorrang, weil er nicht warten kann; ein Byte von Linux wartet, bis der
+    // UART gerade nichts liefert, das vorige Ladebyte im RAM steht und die
+    // Schlange der Tastendrücke Platz hat.
     wire [7:0]  rx_data_q;
     wire        rx_valid_q;
+    wire [7:0]  hps_data_q;
+    wire        hps_valid_q;
     wire        key_fifo_empty;
     wire        key_fifo_full;
     wire [7:0]  key_fifo_data;
@@ -189,6 +197,10 @@ module de25_nano_top #(
     wire        dma_ack;
     wire        loader_active;
 
+    wire        hps_ready = !rx_valid_q && !dma_req && !key_fifo_full;
+    wire [7:0]  in_data   = rx_valid_q ? rx_data_q : hps_data_q;
+    wire        in_valid  = rx_valid_q || (hps_valid_q && hps_ready);
+
     uart_rx #(.CLKS_PER_BIT(UART_DIV)) u_uart_rx (
         .clk     (clk_sys),
         .rst     (rst),
@@ -200,8 +212,8 @@ module de25_nano_top #(
     prg_loader #(.TIMEOUT_CLKS(TIMEOUT_CLKS)) u_prg_loader (
         .clk       (clk_sys),
         .rst       (rst),
-        .rx_data   (rx_data_q),
-        .rx_valid  (rx_valid_q),
+        .rx_data   (in_data),
+        .rx_valid  (in_valid),
         .key_data  (key_data),
         .key_valid (key_valid),
         .dma_req   (dma_req),
@@ -399,6 +411,9 @@ module de25_nano_top #(
     // --- HPS -----------------------------------------------------------------
     // Verdrahtung wie in Terasics golden_top.v. Die Register für Taster und
     // Schalter gibt es im System noch, sie sind hier aber nicht angeschlossen.
+    // c64_m0 ist ein Stück Avalon-Bus, das aus dem System herausgeführt ist
+    // (Bridge c64_bridge, von Hand ergänzt, siehe quartus_hps/README.md);
+    // daran hängt hps_byte_port mit seinen Registern DATA und STATUS.
     wire [2:0] hps_led;
 
 `ifdef ENABLE_HPS
@@ -411,7 +426,53 @@ module de25_nano_top #(
         .outclk_0 (clk_100)
     );
 
+    wire rst_av;
+
+    sync_2ff u_sync_rst_av (
+        .clk      (clk_100),
+        .d_async  (ninit_done),
+        .d_sync_q (rst_av)
+    );
+
+    wire [3:0]  c64_m0_address;     // in Bytes: 0 = DATA, 4 = STATUS
+    wire        c64_m0_write;
+    wire [31:0] c64_m0_writedata;
+    wire [3:0]  c64_m0_byteenable;
+    wire        c64_m0_read;
+    wire [31:0] c64_m0_readdata;
+    wire        c64_m0_readdatavalid;
+    wire        c64_m0_waitrequest;
+
+    hps_byte_port u_hps_byte_port (
+        .clk_av            (clk_100),
+        .rst_av            (rst_av),
+        .avs_address       (c64_m0_address[2]),
+        .avs_write         (c64_m0_write),
+        .avs_writedata     (c64_m0_writedata),
+        .avs_byteenable    (c64_m0_byteenable),
+        .avs_read          (c64_m0_read),
+        .avs_readdata      (c64_m0_readdata),
+        .avs_readdatavalid (c64_m0_readdatavalid),
+        .avs_waitrequest   (c64_m0_waitrequest),
+        .clk               (clk_sys),
+        .rst               (rst),
+        .data_q            (hps_data_q),
+        .valid_q           (hps_valid_q),
+        .ready             (hps_ready)
+    );
+
     qsys_top u_qsys_top (
+        .c64_m0_waitrequest                    (c64_m0_waitrequest),
+        .c64_m0_readdata                       (c64_m0_readdata),
+        .c64_m0_readdatavalid                  (c64_m0_readdatavalid),
+        .c64_m0_burstcount                     (),
+        .c64_m0_writedata                      (c64_m0_writedata),
+        .c64_m0_address                        (c64_m0_address),
+        .c64_m0_write                          (c64_m0_write),
+        .c64_m0_read                           (c64_m0_read),
+        .c64_m0_byteenable                     (c64_m0_byteenable),
+        .c64_m0_debugaccess                    (),
+
         .clk_100_clk                           (clk_100),
         .reset_reset_n                         (~ninit_done),
         .ninit_done_ninit_done                 (ninit_done),
@@ -475,7 +536,9 @@ module de25_nano_top #(
         .hps_io_gpio41                         (HPS_LED)
     );
 `else
-    assign hps_led = 3'b000;
+    assign hps_led     = 3'b000;
+    assign hps_data_q  = 8'h00;
+    assign hps_valid_q = 1'b0;
 `endif
 
     // --- LEDs ---------------------------------------------------------------

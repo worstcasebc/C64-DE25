@@ -36,7 +36,42 @@ So kommen sie her:
    `*_subsys/*.qsys`, alle `.ip`-Dateien, `custom_ip/` und den Bootloader.
 3. Projekt in Quartus öffnen. Meldet Quartus veraltete Bausteine, einmal
    *Project → Upgrade IP Components* ausführen (für dieses Projekt geschehen
-   von 25.1.1 auf 26.1). Sonst ist an den Dateien nichts geändert.
+   von 25.1.1 auf 26.1).
+4. Die Bridge `c64_bridge` von Hand ergänzen, siehe nächster Abschnitt. Ohne
+   sie fehlen dem System die Anschlüsse `c64_m0_*`, die das Top-Level
+   erwartet.
+
+## Eigene Änderung am System: Bridge `c64_bridge`
+
+Das Register für die Bytes an den C64 (`rtl/io/hps_byte_port.v`) steckt nicht
+im Platform-Designer-System, sondern im Top-Level. Dafür wird ein Stück des
+Avalon-Busses aus dem System herausgeführt — wie eine Steckdose in der
+Hauswand, an die außen ein eigenes Gerät kommt. Die Steckdose ist eine zweite
+*Avalon Memory Mapped Pipeline Bridge*.
+
+In Platform Designer (*Tools → Platform Designer*, `qsys_top.qsys` öffnen):
+
+1. In das Untersystem `subsys_periph` (`peripheral_subsys.qsys`) wechseln.
+2. Aus dem IP Catalog *Avalon Memory Mapped Pipeline Bridge IP* hinzufügen,
+   Name `c64_bridge`. Einstellungen:
+   - *Data width* 32, *Symbol width* 8, *Address units* SYMBOLS
+   - *Use automatically-determined address width* aus, *Address width* 4
+   - *Maximum burst size (words)* 1
+   - alles andere wie vorgegeben
+3. Verbinden:
+   - `c64_bridge.clk` mit `periph_clk.out_clk`
+   - `c64_bridge.reset` mit `periph_rst_in.out_reset`
+   - `c64_bridge.s0` mit `pb_cpu_0.m0`, Basisadresse `0x0001_0100`
+4. `c64_bridge.m0` exportieren, Name `c64_m0`.
+5. Zurück in `qsys_top`: Am Untersystem `subsys_periph` gibt es jetzt den
+   Anschluss `c64_m0`. Ebenfalls exportieren, Name wieder `c64_m0`.
+6. Speichern und *Generate HDL*. In `qsys_top/qsys_top_inst.v` müssen danach
+   zehn Anschlüsse `c64_m0_*` stehen (`address` 4 Bit breit).
+
+Platform Designer legt für die Bridge die Datei
+`peripheral_subsys/ip/peripheral_subsys/peripheral_subsys_mm_bridge_0.ip` an
+(der Dateiname behält den vorgeschlagenen Namen, auch wenn die Bridge im
+System `c64_bridge` heißt). Unter diesem Namen steht sie in der `.qsf`.
 
 ## Bauen: nur über einen kurzen Pfad
 
@@ -69,6 +104,19 @@ Basis aus Sicht von Linux: `0x2000_0000` (auf dem Board bestätigt).
 | `0x2001_0060` | `button_pio` | nicht angeschlossen (liest `0xF`) |
 | `0x2001_0070` | `dipsw_pio`  | nicht angeschlossen (liest `0`)   |
 | `0x2001_0080` | `led_pio`    | 3 Bit, `LEDR[3:1]`, 1 = an        |
+| `0x2001_0100` | `DATA`       | `hps_byte_port`: Schreiben schickt Bit 7..0 als Byte an den C64; wird ignoriert, solange belegt |
+| `0x2001_0104` | `STATUS`     | `hps_byte_port`: Bit 0 = 1, solange das letzte Byte unterwegs ist |
+
+Die Bytes an `DATA` haben dieselbe Bedeutung wie am UART vom PC: Tastendrücke
+und Ladeblöcke. `sw/py/c64_hps.py` schickt sie von Linux aus. Auf dem Board
+bestätigt: Tippen (`--type "PRINT 1+1"`) und Laden eines kleinen
+BASIC-Programms (`--load demo.prg --run`, 47 Bytes). Ein großes Programm ist
+über diesen Weg noch nicht geladen worden.
+
+`c64_hps.py` und `c64_blocks.py` müssen dazu auf dem Board im selben
+Verzeichnis liegen. Ohne Netzwerk geht das über die Konsole: Textdateien mit
+`cat > datei` einfügen (Strg+D beendet), Binärdateien als Base64 mit
+`base64 -d > datei`; danach mit `md5sum` vergleichen.
 
 Register von Linux aus schreiben (auf dem Board bestätigt, `LEDR[3:1]` an).
 `devmem2` fehlt auf Terasics Image, deshalb über Python und `/dev/mem`:

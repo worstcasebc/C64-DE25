@@ -17,6 +17,15 @@ set clk_sys [get_clocks {u_pll_c64|iopll_0_outclk0}]
 set_false_path -to   [get_registers {*|meta_q[*]}]
 set_false_path -from [get_ports {KEY[*] SW[*] FPGA_UART_RX HDMI_I2C_SDA HDMI_TX_INT}]
 
+# Bytes von Linux (hps_byte_port, nur im Projekt quartus_hps): Das Byte
+# wechselt mit clk_100 und wird mit clk_sys gelesen. Gelesen wird es aber
+# erst, nachdem das Fähnchen durch den Synchronizer gelaufen ist — dann
+# steht es seit mindestens zwei Takten still. Der Weg braucht kein Timing.
+set hps_byte [get_registers -nowarn {u_hps_byte_port|data_av_q[*]}]
+if {[get_collection_size $hps_byte] > 0} {
+    set_false_path -from $hps_byte -to [get_registers {u_hps_byte_port|data_q[*]}]
+}
+
 # LEDs sind fürs Auge. Der UART ist asynchron zum Empfänger (der tastet
 # selbst in der Bitmitte ab); ein Bit dauert 273 Takte.
 set_false_path -to [get_ports {LEDR[*] FPGA_UART_TX}]

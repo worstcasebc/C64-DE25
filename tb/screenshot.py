@@ -23,7 +23,7 @@ from pathlib import Path
 import run_sim
 
 sys.path.insert(0, str(run_sim.ROOT / "sw" / "py"))
-import c64_term  # noqa: E402  (liefert die Ladeblöcke für eine .PRG-Datei)
+import c64_blocks  # noqa: E402  (liefert die Ladeblöcke für eine .PRG-Datei)
 
 ROOT = run_sim.ROOT
 BUILD = run_sim.BUILD
@@ -80,7 +80,7 @@ def main() -> int:
         plusargs = [f"+wait={(args.wait or 100_000) * CLKS_PER_CPU_CYCLE}"]
 
     if args.load:
-        blocks = c64_term.prg_to_blocks(args.load.read_bytes())
+        blocks = c64_blocks.prg_to_blocks(args.load.read_bytes())
         (BUILD / "load_bytes.hex").write_text("".join(f"{b:02X}\n" for b in blocks))
         plusargs += ["+load=tb/build/load_bytes.hex", f"+loadlen={len(blocks)}"]
     if args.text:

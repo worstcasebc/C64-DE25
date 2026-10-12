@@ -17,8 +17,8 @@ a testbench.
 
 The C64 runs on the board: BASIC start screen, picture and SID sound over
 HDMI, programs loaded from the PC. Timing-critical software works, including
-an FLI picture and test programs with SID sound. Linux runs next to it on the HPS, but
-the two sides do not talk to each other yet.
+an FLI picture and test programs with SID sound. Linux runs next to it on the
+HPS and can type on the C64 keyboard and load programs into its memory.
 
 | # | Milestone | State |
 |---|-----------|-------|
@@ -31,17 +31,20 @@ the two sides do not talk to each other yet.
 | 7 | HPS integration | in progress |
 
 Milestone 7 so far: a second Quartus project builds the same C64 together
-with the HPS. Linux boots, and the Lightweight HPS-to-FPGA bridge is proven by
-switching three LEDs from Linux.
+with the HPS. Linux boots and reaches the FPGA over the Lightweight
+HPS-to-FPGA bridge: it switches three LEDs, and it sends bytes to the C64
+through a register of this project (`rtl/io/hps_byte_port.v`) — the same
+keystrokes and load blocks that the PC sends over the UART.
 
 Not there yet:
 
 - Keyboard: no real keyboard is attached. Keystrokes come from a PC over the
-  UART (see [Controlling the C64](#controlling-the-c64)).
+  UART or from a script on the HPS (see
+  [Controlling the C64](#controlling-the-c64)).
 - No disk drive, so no `.D64` support, and no tape or cartridges.
 - No joysticks.
 - PAL only.
-- Loading programs and typing from Linux on the HPS.
+- A menu or file browser on the HPS, and a USB keyboard.
 
 ### What is inside
 
@@ -156,6 +159,10 @@ Three things to know about the HPS project
 
   If Quartus then reports outdated IP, run *Project → Upgrade IP Components*
   once.
+- **One manual change.** Terasic's system needs one addition in Platform
+  Designer before the build: a bridge that leads a piece of the Avalon bus out
+  to the top level. The steps are in
+  [quartus_hps/README.md](quartus_hps/README.md).
 - **Short path.** In a deeply nested directory Quartus aborts the HPS build
   after about 40 seconds. Map the repository to a drive letter first
   (`subst Q: <path to the repository>`) and open the project from there.
@@ -238,9 +245,19 @@ same serial port.
 
 ### From Linux on the HPS
 
-With the HPS build, log in on the HPS serial console (115200 baud, 8N1). So
-far the only connection into the FPGA is a 3-bit register for `LEDR1`–`LEDR3`
-at `0x2001_0080`:
+With the HPS build, log in on the HPS serial console (115200 baud, 8N1).
+Copy `sw/py/c64_hps.py` and `sw/py/c64_blocks.py` into one directory on the
+board; then Linux can type and load programs:
+
+```
+sudo python3 c64_hps.py --type "PRINT 1+1"        type a line, then RETURN
+sudo python3 c64_hps.py --load game.prg --run     load a program and type RUN
+```
+
+The bytes go through a register at `0x2001_0100` into the same path as the
+bytes from the PC, so do not load from both sides at the same time.
+
+A second register, 3 bits at `0x2001_0080`, switches `LEDR1`–`LEDR3`:
 
 ```
 sudo python3 -c "import mmap,os,struct; f=os.open('/dev/mem',os.O_RDWR|os.O_SYNC); m=mmap.mmap(f,4096,offset=0x20010000); m[0x80:0x84]=struct.pack('<I',7)"
