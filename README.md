@@ -44,7 +44,8 @@ Not there yet:
 - Disks: a 1541 disk drive reads `.D64` images that Linux on the HPS supplies
   (HPS build only), chosen from a menu on the screen. Not yet: writing to the
   disk and `.G64` images (prepared but untried). No tape or cartridges.
-- No joysticks.
+- Joysticks: the numeric keypad of the USB keyboard acts as one (HPS build
+  only); a real USB joystick is not supported yet.
 - PAL only.
 
 ### What is inside

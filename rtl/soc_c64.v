@@ -44,6 +44,13 @@
 //         bekommt dafür einmal den Schritt der CPU.
 // Ports:  uart_txd — serielle Ausgabe, UART_CLKS_PER_BIT Takte pro Bit.
 //         keys — gedrückte Tasten, siehe key_matrix.
+//         joy1, joy2 — Joysticks an Port 1 und 2, je Bit 1 = betätigt:
+//         Bit 0 hoch, 1 runter, 2 links, 3 rechts, 4 Feuer. Wie im echten
+//         C64 hängen sie an denselben Leitungen wie die Tastatur: Port 2 an
+//         Port A der CIA 1, Port 1 an Port B. Ein betätigter Joystick zieht
+//         seine Leitung auf 0 — deshalb "tippt" ein Joystick an Port 1 auf
+//         dem BASIC-Bildschirm Zeichen, und einer an Port 2 kann Tasten
+//         verfälschen.
 //         restore = 1: Taste RESTORE gedrückt. Sie hängt nicht im Gitter,
 //         sondern wie die zweite CIA am NMI der CPU. Der NMI reagiert nur
 //         auf den Wechsel, eine gehaltene Taste löst also einmal aus.
@@ -85,6 +92,8 @@ module soc_c64 #(
     input  wire        rst,
     output wire        uart_txd,
     input  wire [63:0] keys,
+    input  wire [4:0]  joy1,
+    input  wire [4:0]  joy2,
     input  wire        restore,
     output wire        iec_atn_o,
     output wire        iec_clk_o,
@@ -461,9 +470,14 @@ module soc_c64 #(
     wire [7:0] cia1_pb_keys;
     wire       cia1_irq_n;
 
+    // Pegel der Leitungen an Port A: was die CIA ausgibt, und der Joystick
+    // an Port 2, der seine Leitungen auf 0 ziehen kann. Diesen Pegel sieht
+    // auch das Tastaturgitter.
+    wire [7:0] cia1_pa_line = cia1_pa_out & ~{3'b000, joy2};
+
     key_matrix u_key_matrix (
         .keys (keys),
-        .pa   (cia1_pa_out),
+        .pa   (cia1_pa_line),
         .pb   (cia1_pb_keys)
     );
 
@@ -478,10 +492,10 @@ module soc_c64 #(
         .rs      (addr[3:0]),
         .db_in   (cpu_dout),
         .db_out  (cia1_dout),
-        .pa_in   (cia1_pa_out),
+        .pa_in   (cia1_pa_line),
         .pa_out  (cia1_pa_out),
         .pa_oe   (),
-        .pb_in   (cia1_pb_out & cia1_pb_keys),
+        .pb_in   (cia1_pb_out & cia1_pb_keys & ~{3'b000, joy1}),
         .pb_out  (cia1_pb_out),
         .pb_oe   (),
         .flag_n  (1'b1),

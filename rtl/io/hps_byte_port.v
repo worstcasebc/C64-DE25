@@ -37,11 +37,15 @@
 //                       Bit 1 = 1: Taste RESTORE gedrückt (lesen und
 //                       schreiben). Sie hat ein eigenes Bit, weil sie beim
 //                       C64 nicht im Gitter hängt, sondern am NMI.
+//                       Bit 12..8 = Joystick an Port 1, Bit 20..16 =
+//                       Joystick an Port 2 (lesen und schreiben), je
+//                       1 = betätigt: hoch, runter, links, rechts, Feuer.
 //           2  KEYS_LO  Tasten 31..0, lesen und schreiben
 //           3  KEYS_HI  Tasten 63..32, lesen und schreiben
 //           avs_byteenable: Bei DATA muss Bit 0 gesetzt sein; so löst ein
 //           Zugriff, den Linux in einzelne Bytes zerlegt, nur einmal aus.
-//           Bei den Tasten werden nur die freigegebenen Bytes geändert.
+//           Bei den Tasten und in STATUS werden nur die freigegebenen Bytes
+//           geändert.
 //           avs_readdatavalid kommt einen Takt nach avs_read;
 //           avs_waitrequest ist immer 0. Lesen ändert nichts.
 //         Seite C64:
@@ -50,6 +54,7 @@
 //           übergeben.
 //           keys_q — Tastenzustand für key_matrix.
 //           restore_q — Taste RESTORE, für den NMI in soc_c64.
+//           joy1_q, joy2_q — Joysticks für soc_c64.
 
 `default_nettype none
 
@@ -71,7 +76,9 @@ module hps_byte_port (
     output reg         valid_q,
     input  wire        ready,
     output wire [63:0] keys_q,
-    output wire        restore_q
+    output wire        restore_q,
+    output wire [4:0]  joy1_q,
+    output wire [4:0]  joy2_q
 );
 
     localparam [1:0] A_DATA    = 2'd0,
@@ -84,6 +91,8 @@ module hps_byte_port (
     reg [7:0]  data_av_q;   // der Brief; steht still, solange belegt
     reg [63:0] keys_av_q;   // Tastenzustand, wie Linux ihn geschrieben hat
     reg        restore_av_q;
+    reg [4:0]  joy1_av_q;
+    reg [4:0]  joy2_av_q;
 
     // --- Seite HPS (clk_av) -------------------------------------------------
     wire ack_sync_q;
@@ -106,6 +115,8 @@ module hps_byte_port (
             req_tgl_q         <= 1'b0;
             keys_av_q         <= 64'd0;
             restore_av_q      <= 1'b0;
+            joy1_av_q         <= 5'd0;
+            joy2_av_q         <= 5'd0;
             avs_readdatavalid <= 1'b0;
         end else begin
             if (do_send) begin
@@ -113,8 +124,10 @@ module hps_byte_port (
                 req_tgl_q <= ~req_tgl_q;
             end
 
-            if (avs_write && (avs_address == A_STATUS) && avs_byteenable[0]) begin
-                restore_av_q <= avs_writedata[1];
+            if (avs_write && (avs_address == A_STATUS)) begin
+                if (avs_byteenable[0]) restore_av_q <= avs_writedata[1];
+                if (avs_byteenable[1]) joy1_av_q    <= avs_writedata[12:8];
+                if (avs_byteenable[2]) joy2_av_q    <= avs_writedata[20:16];
             end
 
             for (i = 0; i < 4; i = i + 1) begin
@@ -127,7 +140,7 @@ module hps_byte_port (
             avs_readdatavalid <= avs_read;
             case (avs_address)
                 A_DATA:    avs_readdata <= {24'b0, data_av_q};
-                A_STATUS:  avs_readdata <= {30'b0, restore_av_q, busy};
+                A_STATUS:  avs_readdata <= {11'b0, joy2_av_q, 3'b0, joy1_av_q, 6'b0, restore_av_q, busy};
                 A_KEYS_LO: avs_readdata <= keys_av_q[31:0];
                 default:   avs_readdata <= keys_av_q[63:32];
             endcase
@@ -143,10 +156,10 @@ module hps_byte_port (
         .d_sync_q (req_sync_q)
     );
 
-    sync_2ff #(.WIDTH(65)) u_sync_keys (
+    sync_2ff #(.WIDTH(75)) u_sync_keys (
         .clk      (clk),
-        .d_async  ({restore_av_q, keys_av_q}),
-        .d_sync_q ({restore_q, keys_q})
+        .d_async  ({joy2_av_q, joy1_av_q, restore_av_q, keys_av_q}),
+        .d_sync_q ({joy2_q, joy1_q, restore_q, keys_q})
     );
 
     always @(posedge clk) begin

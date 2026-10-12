@@ -19,6 +19,8 @@
 //      lässt die Tasten stehen.
 //  12. RESTORE (STATUS Bit 1): erscheint beim C64, liest sich zurück, lässt
 //      Bit 0 und den Datenstrom in Ruhe.
+//  13. Joysticks (STATUS Bit 12..8 und 20..16): erscheinen beim C64, lesen
+//      sich zurück; jedes Byte von STATUS lässt sich einzeln schreiben.
 
 `timescale 1ns / 1ps
 `default_nettype none
@@ -49,6 +51,7 @@ module tb_hps_byte_port;
     reg         ready = 1'b0;
     wire [63:0] keys;
     wire        restore;
+    wire [4:0]  joy1, joy2;
     reg         rand_ready = 1'b0;
 
     integer     errors = 0;
@@ -75,7 +78,9 @@ module tb_hps_byte_port;
         .valid_q           (valid),
         .ready             (ready),
         .keys_q            (keys),
-        .restore_q         (restore)
+        .restore_q         (restore),
+        .joy1_q            (joy1),
+        .joy2_q            (joy2)
     );
 
     always #5      clk_av = ~clk_av;   // 100 MHz
@@ -286,6 +291,30 @@ module tb_hps_byte_port;
         expect_eq(restore, 0, "12. RESTORE losgelassen");
         expect_eq(n_got, 3 + N_RAND, "12. RESTORE liefert kein Byte");
         expect_eq(keys === 64'h0000_0005_80FF_0001, 1, "12. RESTORE laesst die Tasten stehen");
+
+        // 13. Joysticks
+        expect_eq({joy2, joy1}, 0, "13. Joysticks anfangs in Ruhe");
+        av_write(STATUS, 32'h0015_0A00, 4'b1111);
+        repeat (4) @(negedge clk);
+        expect_eq(joy1, 5'h0A, "13. Joystick an Port 1");
+        expect_eq(joy2, 5'h15, "13. Joystick an Port 2");
+        expect_eq(restore, 0, "13. RESTORE bleibt los");
+        av_read(STATUS, rd);
+        expect_eq(rd, 32'h0015_0A00, "13. STATUS zuruecklesen");
+        av_write(STATUS, 32'hFFFF_FFFF, 4'b0001);      // nur Byte 0: RESTORE
+        repeat (4) @(negedge clk);
+        expect_eq(restore, 1, "13. RESTORE ueber Byte 0");
+        expect_eq(joy1, 5'h0A, "13. Port 1 unveraendert");
+        expect_eq(joy2, 5'h15, "13. Port 2 unveraendert");
+        av_write(STATUS, 32'h0000_1F00, 4'b0010);      // nur Byte 1: Port 1
+        repeat (4) @(negedge clk);
+        expect_eq(joy1, 5'h1F, "13. Port 1 ueber Byte 1");
+        expect_eq(joy2, 5'h15, "13. Port 2 weiter unveraendert");
+        expect_eq(restore, 1, "13. RESTORE weiter gedrueckt");
+        av_write(STATUS, 32'h0000_0000, 4'b1111);
+        repeat (4) @(negedge clk);
+        expect_eq({joy2, joy1, restore}, 0, "13. alles losgelassen");
+        expect_eq(n_got, 3 + N_RAND, "13. Joysticks liefern kein Byte");
 
         if (errors == 0) $display("PASS: tb_hps_byte_port");
         else             $display("FAIL: tb_hps_byte_port (%0d Fehler)", errors);

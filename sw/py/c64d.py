@@ -16,9 +16,14 @@ Der Dienst macht drei Dinge zugleich:
      (rtl/video/video_osd.v) — der C64 läuft darunter ungestört weiter, auch
      ein Spiel, das nach der nächsten Diskette fragt.
 
+Der Ziffernblock ist ein Joystick: 8/2/4/6 sind die Richtungen, 7/9/1/3 die
+Diagonalen, 0 und Strg rechts sind Feuer. An welchem Port des C64 er steckt
+(die meisten Spiele erwarten Port 2), stellt man im Menü um.
+
 Im Menü:
     Pfeil auf/ab, Bild auf/ab   Eintrag wählen
-    Enter                       .D64/.G64 einlegen, .PRG laden
+    Enter                       .D64/.G64 einlegen, .PRG laden, Joystick-Port
+                                wechseln
     Esc oder F12                Menü schließen
 Solange das Menü offen ist, gehen die Tasten nicht an den C64.
 
@@ -60,6 +65,15 @@ LIST_TOP = 3
 KEY_ESC, KEY_ENTER, KEY_F12 = 1, 28, 88
 KEY_HOME, KEY_UP, KEY_PAGEUP, KEY_END, KEY_DOWN, KEY_PAGEDOWN = 102, 103, 104, 107, 108, 109
 REPEATING = (KEY_UP, KEY_DOWN, KEY_PAGEUP, KEY_PAGEDOWN)    # im Menü wirkt Gedrückthalten
+
+# Joystick auf dem Ziffernblock: Tastennummer von Linux -> Bits des Joysticks
+# (1 hoch, 2 runter, 4 links, 8 rechts, 16 Feuer). Die Ecken sind Diagonalen.
+JOY_KEYS = {
+    72: 1, 80: 2, 75: 4, 77: 8,         # 8, 2, 4, 6
+    71: 1 | 4, 73: 1 | 8,               # 7, 9
+    79: 2 | 4, 81: 2 | 8,               # 1, 3
+    82: 16, 97: 16,                     # 0 und Strg rechts: Feuer
+}
 
 USB_MOUNT = "/run/c64-usb"      # hier hängt der Dienst den Stick selbst ein
 EXTENSIONS = (".d64", ".g64", ".prg")
@@ -205,7 +219,9 @@ class Menu:
     def __init__(self, osd: Osd, drive: Drive, load_prg):
         self.osd, self.drive, self.load_prg = osd, drive, load_prg
         self.open = False
-        self.entries: list[tuple[str, Path | None]] = []
+        # Einträge: (Text, Datei) oder (Text, "eject") oder (Text, "joy")
+        self.entries: list[tuple[str, Path | str]] = []
+        self.joy_port = 2
         self.selected = 0
         self.top = 0
         self.source = ""
@@ -215,11 +231,13 @@ class Menu:
         stick = find_stick()
         folder = stick or str(Path(__file__).resolve().parent)
         self.source = "USB-STICK" if stick else f"KEIN USB-STICK: {folder}"
-        self.entries = [(p.name, p) for p in list_files(folder)]
+        files = list_files(folder)
+        self.entries = [(p.name, p) for p in files]
         if self.drive.name:
-            self.entries.insert(0, ("<DISKETTE HERAUSNEHMEN>", None))
-        self.selected = min(self.selected, max(len(self.entries) - 1, 0))
-        self.message = "" if self.entries else "KEINE .D64 .G64 .PRG GEFUNDEN"
+            self.entries.insert(0, ("<DISKETTE HERAUSNEHMEN>", "eject"))
+        self.entries.append((f"<JOYSTICK: PORT {self.joy_port}>", "joy"))
+        self.selected = min(self.selected, len(self.entries) - 1)
+        self.message = "" if files else "KEINE .D64 .G64 .PRG GEFUNDEN"
         self.open = True
         self.draw()
 
@@ -266,9 +284,14 @@ class Menu:
             self.selected = max(last, 0)
         elif code == KEY_ENTER and self.entries:
             path = self.entries[self.selected][1]
-            if path is None:
+            if path == "eject":
                 self.drive.eject()
                 self.close()
+                return
+            if path == "joy":
+                self.joy_port = 1 if self.joy_port == 2 else 2
+                self.entries[self.selected] = (f"<JOYSTICK: PORT {self.joy_port}>", "joy")
+                self.draw()
                 return
             if path.suffix.lower() == ".prg":
                 self.message = self.load_prg(path)
@@ -326,7 +349,15 @@ def main() -> int:
         def release_all() -> None:
             reg_a[keys.KEYS_LO] = 0
             reg_a[keys.KEYS_HI] = 0
-            reg_a[keys.STATUS] = 0
+            reg_a[keys.STATUS] = 0          # RESTORE und beide Joysticks
+
+        def write_status() -> None:
+            """RESTORE (Bit 1) und der Joystick am gewählten Port (ab Bit 8 bzw. 16)."""
+            bits = 0
+            for code in joy_pressed:
+                bits |= JOY_KEYS[code]
+            reg_a[keys.STATUS] = ((keys.STATUS_RESTORE if restore else 0)
+                                  | bits << (8 if menu.joy_port == 1 else 16))
 
         drive = Drive(reg_b, verbose="-v" in sys.argv[1:])
         busy_until = 0.0        # solange wird das Laufwerk ohne Pause abgefragt
@@ -335,6 +366,8 @@ def main() -> int:
         kbd = None
         next_try = 0.0
         pressed: set[int] = set()
+        joy_pressed: set[int] = set()
+        restore = False
         state = 0
         release_all()
         print("c64d läuft: Tastatur, Laufwerk 8, Menü mit F12.", flush=True)
@@ -365,6 +398,7 @@ def main() -> int:
                     except OSError:
                         os.close(kbd)       # abgezogen
                         kbd, data, pressed, state = None, b"", set(), 0
+                        joy_pressed, restore = set(), False
                         release_all()
                     for offset in range(0, len(data) - keys.EVENT.size + 1, keys.EVENT.size):
                         _, _, kind, code, value = keys.EVENT.unpack_from(data, offset)
@@ -379,11 +413,20 @@ def main() -> int:
                         if code == KEY_F12:
                             if value:
                                 pressed, state = set(), 0
+                                joy_pressed, restore = set(), False
                                 release_all()
                                 menu.show()
                             continue
                         if code == keys.KEY_RESTORE:
-                            reg_a[keys.STATUS] = keys.STATUS_RESTORE if value else 0
+                            restore = bool(value)
+                            write_status()
+                            continue
+                        if code in JOY_KEYS:
+                            if value:
+                                joy_pressed.add(code)
+                            else:
+                                joy_pressed.discard(code)
+                            write_status()
                             continue
                         if value:
                             pressed.add(code)
@@ -401,7 +444,7 @@ def main() -> int:
                 if drive.verbose and time.monotonic() >= next_report:
                     next_report = time.monotonic() + 2.0
                     print(f"Stand: REQUEST={reg_b[disk.REQUEST]:08x} CONTROL={reg_b[disk.CONTROL]:x} "
-                          f"MOUNT={reg_b[disk.MOUNT]:x} Tasten={state:016x} Menü={'offen' if menu.open else 'zu'} "
+                          f"MOUNT={reg_b[disk.MOUNT]:x} Tasten={state:016x} STATUS={reg_a[keys.STATUS]:06x} Menü={'offen' if menu.open else 'zu'} "
                           f"Tastatur={'da' if kbd is not None else 'fehlt'}", flush=True)
         except KeyboardInterrupt:
             pass

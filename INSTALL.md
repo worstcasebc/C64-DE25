@@ -385,8 +385,12 @@ works when a game asks for the next disk.
    |-----|-------------|
    | F12 | open and close the menu |
    | arrow up/down, Page Up/Down | choose an entry |
-   | Enter | insert the `.d64`/`.g64`, or load the `.prg` (a BASIC program is started with RUN) |
+   | Enter | insert the `.d64`/`.g64`, or load the `.prg` (a BASIC program is started with RUN); on the entry `<JOYSTICK: PORT n>` switch the joystick to the other port |
    | Esc | close the menu |
+
+   Outside the menu the numeric keypad is a joystick:
+   8/2/4/6 are the directions, 7/9/1/3 the diagonals, 0 and right Ctrl are
+   fire. Most games expect it at port 2, which is the preset.
 
 4. Start it at every boot:
 

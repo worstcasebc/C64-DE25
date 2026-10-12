@@ -74,6 +74,8 @@ module tb_c64_video;
         .rst        (rst),
         .uart_txd   (uart_txd),
         .keys       (keys),
+        .joy1       (5'd0),
+        .joy2       (5'd0),
         .restore    (1'b0),
         .iec_atn_o  (),
         .iec_clk_o  (),

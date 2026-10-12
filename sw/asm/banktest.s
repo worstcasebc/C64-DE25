@@ -18,9 +18,13 @@
 ;   CIA-IRQ    OK
 ;   CIA-NMI    OK
 ;   IEC-BUS    OK
+;   JOY PORT 1 OK
+;   JOY PORT 2 OK
 ; Im Fehlerfall steht statt OK der gelesene Wert: FEHLER $xx.
 ; IEC-BUS braucht ein Laufwerk am seriellen Bus (oder die Testbench, die eines
-; spielt); ohne meldet die Zeile FEHLER $E7.
+; spielt); ohne meldet die Zeile FEHLER $E7. Die beiden JOY-Zeilen erwarten
+; bestimmte betätigte Richtungen (siehe unten); auf dem Board ohne Joystick
+; melden sie FEHLER $1F.
 ; Zum Schluss füllt es den Bildschirmspeicher: Titel in Zeile 0, ab Zeile 2
 ; alle 256 Zeichen in der Reihenfolge ihrer Codes, sonst Leerzeichen.
 ; Farben wie beim C64-Start (Rahmen und Schrift hellblau, Hintergrund blau),
@@ -38,6 +42,8 @@ VIC_CR2  = $D016        ; VIC: Bit 3 40 Spalten
 VIC_MEM  = $D018        ; VIC: wo Bildschirmspeicher und Zeichensatz liegen
 BORDER   = $D020        ; VIC: Rahmenfarbe
 BGCOLOR  = $D021        ; VIC: Hintergrundfarbe
+CIA_PA   = $DC00        ; CIA 1: Port A, Bit 0-4 = Joystick an Port 2
+CIA_PB   = $DC01        ; CIA 1: Port B, Bit 0-4 = Joystick an Port 1
 CIA_TALO = $DC04        ; CIA 1: Timer A, unteres Byte
 CIA_TAHI = $DC05        ; CIA 1: Timer A, oberes Byte
 CIA_ICR  = $DC0D        ; CIA 1: Interrupts melden/freigeben
@@ -253,6 +259,22 @@ reset:
         ldx #(t_iec - text)
         jsr report
 
+        ; Joysticks: Bit 0-4 von Port B (Joystick an Port 1) und Port A
+        ; (Port 2) der ersten CIA sind 0, wo eine Richtung oder Feuer
+        ; betätigt ist. Beide Ports stehen nach dem Reset auf Eingang. Die
+        ; Testbench hält an Port 1 "runter und rechts" (%01010), an Port 2
+        ; "hoch, links und Feuer" (%10101) — gelesen wird das Gegenteil.
+        lda CIA_PB
+        and #$1F
+        ldy #$15
+        ldx #(t_joy1 - text)
+        jsr report
+        lda CIA_PA
+        and #$1F
+        ldy #$0A
+        ldx #(t_joy2 - text)
+        jsr report
+
         ; SID: volle Lautstärke, wie es das KERNAL beim Start einstellt. Das
         ; Register lässt sich nicht zurücklesen; die Testbench schaut nach,
         ; ob der Wert beim SID angekommen ist.
@@ -422,6 +444,8 @@ t_port:     .byte "CPU-PORT   ", 0
 t_irq:      .byte "CIA-IRQ    ", 0
 t_nmi:      .byte "CIA-NMI    ", 0
 t_iec:      .byte "IEC-BUS    ", 0
+t_joy1:     .byte "JOY PORT 1 ", 0
+t_joy2:     .byte "JOY PORT 2 ", 0
 t_fail:     .byte "FEHLER $", 0
 t_ok:       .byte "OK"  ; läuft in t_eol weiter
 t_eol:      .byte $0D, $0A, 0

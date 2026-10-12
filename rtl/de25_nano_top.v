@@ -192,6 +192,8 @@ module de25_nano_top #(
     wire [63:0] typer_keys;
     wire [63:0] hps_keys_q;
     wire        hps_restore_q;      // Taste RESTORE, nur von Linux
+    wire [4:0]  hps_joy1_q;         // Joysticks, nur von Linux
+    wire [4:0]  hps_joy2_q;
     wire        key_fifo_empty;
     wire        key_fifo_full;
     wire [7:0]  key_fifo_data;
@@ -280,6 +282,8 @@ module de25_nano_top #(
         .rst        (rst),
         .uart_txd   (FPGA_UART_TX),
         .keys       (keys),
+        .joy1       (hps_joy1_q),
+        .joy2       (hps_joy2_q),
         .restore    (hps_restore_q),
         .iec_atn_o  (iec_atn),
         .iec_clk_o  (iec_clk_c64),
@@ -537,7 +541,9 @@ module de25_nano_top #(
         .valid_q           (hps_valid_q),
         .ready             (hps_ready),
         .keys_q            (hps_keys_q),
-        .restore_q         (hps_restore_q)
+        .restore_q         (hps_restore_q),
+        .joy1_q            (hps_joy1_q),
+        .joy2_q            (hps_joy2_q)
     );
 
     wire [13:0] disk_m0_address;    // in Bytes; ab 0x2000 der Puffer
@@ -687,6 +693,8 @@ module de25_nano_top #(
     assign hps_valid_q = 1'b0;
     assign hps_keys_q  = 64'd0;
     assign hps_restore_q = 1'b0;
+    assign hps_joy1_q    = 5'd0;
+    assign hps_joy2_q    = 5'd0;
     assign osd_rgb_q     = c64_rgb_q;
     assign osd_de_q      = c64_de_q;
     assign osd_hsync_q   = c64_hsync_q;

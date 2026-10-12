@@ -90,7 +90,7 @@ Basis aus Sicht von Linux: `0x2000_0000` (auf dem Board bestätigt).
 | `0x2001_0070` | `dipsw_pio`  | nicht angeschlossen (liest `0`)   |
 | `0x2001_0080` | `led_pio`    | 3 Bit, `LEDR[3:1]`, 1 = an        |
 | `0x2001_0100` | `DATA`       | `hps_byte_port`: Schreiben schickt Bit 7..0 als Byte an den C64; wird ignoriert, solange belegt |
-| `0x2001_0104` | `STATUS`     | `hps_byte_port`: Bit 0 = 1, solange das letzte Byte unterwegs ist (nur lesen); Bit 1 = 1: Taste RESTORE gedrückt (lesen und schreiben) |
+| `0x2001_0104` | `STATUS`     | `hps_byte_port`: Bit 0 = 1, solange das letzte Byte unterwegs ist (nur lesen); Bit 1 = 1: Taste RESTORE gedrückt; Bit 12..8 = Joystick an Port 1, Bit 20..16 = Joystick an Port 2, je hoch, runter, links, rechts, Feuer (alle lesen und schreiben, jedes Byte einzeln schreibbar) |
 | `0x2001_0108` | `KEYS_LO`    | `hps_byte_port`: Tasten 31..0 im Gitter des C64, 1 = gedrückt (Nummern wie in `rtl/io/key_matrix.v`) |
 | `0x2001_010C` | `KEYS_HI`    | `hps_byte_port`: Tasten 63..32 |
 | `0x2001_4000` | `REQUEST`    | `hps_disk_port`: Anforderung des Laufwerks — Bit 0 lesen, Bit 1 schreiben, Bit 13..8 Anzahl Blöcke − 1, Bit 31..16 erster Block |
@@ -114,6 +114,10 @@ Einlegen einer `.D64` vom Stick, Laden eines Spiels über mehrere Spuren,
 Laden eines `.PRG`. Er ersetzt die beiden einzelnen Skripte unten, die weiter
 für sich benutzbar bleiben — aber nie gleichzeitig mit dem Dienst; die
 Skripte prüfen das selbst und brechen sonst ab.
+
+Der Ziffernblock der Tastatur ist im Dienst ein Joystick (8/2/4/6, Ecken
+diagonal, 0 und Strg rechts Feuer); der Port wird im Menü gewählt. Auf dem
+Board bestätigt: ein Spiel lässt sich damit steuern.
 
 `sw/py/c64_keys.py` liest eine USB-Tastatur unter Linux und schreibt den
 Zustand nach `KEYS_LO` und `KEYS_HI` (auf dem Board bestätigt: Die Tastatur
