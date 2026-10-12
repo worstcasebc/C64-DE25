@@ -74,6 +74,7 @@ module tb_c64_video;
         .rst        (rst),
         .uart_txd   (uart_txd),
         .keys       (keys),
+        .restore    (1'b0),
         .dma_req    (dma_req),
         .dma_addr   (dma_addr),
         .dma_data   (dma_data),

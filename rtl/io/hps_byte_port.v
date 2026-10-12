@@ -33,7 +33,10 @@
 //           0  DATA     Schreiben: Bit 7..0 = Byte für den C64. Wird
 //                       ignoriert, solange belegt.
 //                       Lesen: das zuletzt angenommene Byte.
-//           1  STATUS   Lesen: Bit 0 = 1, solange belegt.
+//           1  STATUS   Bit 0 = 1, solange belegt (nur lesen).
+//                       Bit 1 = 1: Taste RESTORE gedrückt (lesen und
+//                       schreiben). Sie hat ein eigenes Bit, weil sie beim
+//                       C64 nicht im Gitter hängt, sondern am NMI.
 //           2  KEYS_LO  Tasten 31..0, lesen und schreiben
 //           3  KEYS_HI  Tasten 63..32, lesen und schreiben
 //           avs_byteenable: Bei DATA muss Bit 0 gesetzt sein; so löst ein
@@ -46,6 +49,7 @@
 //           der Abnehmer ready = 1 zeigt. In diesem Takt gilt das Byte als
 //           übergeben.
 //           keys_q — Tastenzustand für key_matrix.
+//           restore_q — Taste RESTORE, für den NMI in soc_c64.
 
 `default_nettype none
 
@@ -66,7 +70,8 @@ module hps_byte_port (
     output reg  [7:0]  data_q,
     output reg         valid_q,
     input  wire        ready,
-    output wire [63:0] keys_q
+    output wire [63:0] keys_q,
+    output wire        restore_q
 );
 
     localparam [1:0] A_DATA    = 2'd0,
@@ -78,6 +83,7 @@ module hps_byte_port (
     reg        ack_tgl_q;   // Fähnchen der C64-Seite (clk)
     reg [7:0]  data_av_q;   // der Brief; steht still, solange belegt
     reg [63:0] keys_av_q;   // Tastenzustand, wie Linux ihn geschrieben hat
+    reg        restore_av_q;
 
     // --- Seite HPS (clk_av) -------------------------------------------------
     wire ack_sync_q;
@@ -99,11 +105,16 @@ module hps_byte_port (
         if (rst_av) begin
             req_tgl_q         <= 1'b0;
             keys_av_q         <= 64'd0;
+            restore_av_q      <= 1'b0;
             avs_readdatavalid <= 1'b0;
         end else begin
             if (do_send) begin
                 data_av_q <= avs_writedata[7:0];
                 req_tgl_q <= ~req_tgl_q;
+            end
+
+            if (avs_write && (avs_address == A_STATUS) && avs_byteenable[0]) begin
+                restore_av_q <= avs_writedata[1];
             end
 
             for (i = 0; i < 4; i = i + 1) begin
@@ -116,7 +127,7 @@ module hps_byte_port (
             avs_readdatavalid <= avs_read;
             case (avs_address)
                 A_DATA:    avs_readdata <= {24'b0, data_av_q};
-                A_STATUS:  avs_readdata <= {31'b0, busy};
+                A_STATUS:  avs_readdata <= {30'b0, restore_av_q, busy};
                 A_KEYS_LO: avs_readdata <= keys_av_q[31:0];
                 default:   avs_readdata <= keys_av_q[63:32];
             endcase
@@ -132,10 +143,10 @@ module hps_byte_port (
         .d_sync_q (req_sync_q)
     );
 
-    sync_2ff #(.WIDTH(64)) u_sync_keys (
+    sync_2ff #(.WIDTH(65)) u_sync_keys (
         .clk      (clk),
-        .d_async  (keys_av_q),
-        .d_sync_q (keys_q)
+        .d_async  ({restore_av_q, keys_av_q}),
+        .d_sync_q ({restore_q, keys_q})
     );
 
     always @(posedge clk) begin

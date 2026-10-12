@@ -1,0 +1,24 @@
+# c64-keys.service — startet c64_keys.py beim Booten von Linux auf dem HPS.
+#
+# Damit ist die USB-Tastatur ohne Anmeldung die Tastatur des C64. Der Dienst
+# läuft als root (nötig für /dev/mem und die Tastatur). Ist keine Tastatur
+# angesteckt oder wird sie abgezogen, endet das Skript; systemd startet es
+# alle zwei Sekunden neu, bis wieder eine da ist.
+#
+# Einrichten (auf dem Board; das Skript liegt in /home/terasic):
+#   sudo cp c64-keys.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now c64-keys
+# Nachsehen:   systemctl status c64-keys
+# Abschalten:  sudo systemctl disable --now c64-keys
+
+[Unit]
+Description=USB-Tastatur als Tastatur des C64
+
+[Service]
+ExecStart=/usr/bin/python3 /home/terasic/c64_keys.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

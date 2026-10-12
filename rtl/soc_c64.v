@@ -42,6 +42,11 @@
 //         bekommt dafür einmal den Schritt der CPU.
 // Ports:  uart_txd — serielle Ausgabe, UART_CLKS_PER_BIT Takte pro Bit.
 //         keys — gedrückte Tasten, siehe key_matrix.
+//         restore = 1: Taste RESTORE gedrückt. Sie hängt nicht im Gitter,
+//         sondern wie die zweite CIA am NMI der CPU. Der NMI reagiert nur
+//         auf den Wechsel, eine gehaltene Taste löst also einmal aus.
+//         Vereinfachung: Solange sie gehalten wird, kommt kein NMI der
+//         CIA 2 durch (der echte C64 macht aus dem Druck einen kurzen Impuls).
 //         dma_* — dma_req = 1 mit Adresse und Daten halten, bis dma_ack = 1.
 //         pix_en = 1 für einen Takt pro Pixel; dazu vic_color (Farbnummer
 //         0..15) und vic_hblank/vic_vblank (1 in der Zeilen- bzw.
@@ -66,6 +71,7 @@ module soc_c64 #(
     input  wire        rst,
     output wire        uart_txd,
     input  wire [63:0] keys,
+    input  wire        restore,
     input  wire        dma_req,
     input  wire [15:0] dma_addr,
     input  wire [7:0]  dma_data,
@@ -159,7 +165,7 @@ module soc_c64 #(
         .en   (cpu_step),
         .rdy  (ba_q),
         .irq  (cia1_irq | ~vic_irq_n),
-        .nmi  (cia2_irq),
+        .nmi  (cia2_irq | restore),
         .addr (addr),
         .din  (cpu_din),
         .dout (cpu_dout),

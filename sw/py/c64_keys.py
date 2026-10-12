@@ -7,12 +7,15 @@ Aufruf (root nötig, weil /dev/mem und die Tastatur geöffnet werden):
     sudo python3 c64_keys.py /dev/input/event0    dieses Gerät nehmen
     sudo python3 c64_keys.py --list               gefundene Tastaturen zeigen
 Beenden mit Strg+C auf der Konsole, von der aus das Skript gestartet wurde.
+Beim Booten von selbst starten: siehe c64-keys.service.
 
 Linux meldet für jede Taste "gedrückt" und "losgelassen". Das Skript führt
 Buch, welche Tasten gerade unten sind, und schreibt daraus den Zustand der 64
 Tasten im Gitter des C64 in zwei Register von rtl/io/hps_byte_port.v:
     0x2001_0108  KEYS_LO  Tasten 31..0
     0x2001_010C  KEYS_HI  Tasten 63..32
+    0x2001_0104  STATUS   Bit 1 = Taste RESTORE (hängt beim C64 nicht im
+                          Gitter, sondern am NMI)
 Die Nummern sind die aus rtl/io/key_matrix.v. So sieht der C64 gehaltene
 Tasten und Kombinationen wie bei einer echten Tastatur.
 
@@ -30,8 +33,7 @@ Namen unten sind die einer US-Tastatur (so nennt Linux die Tasten).
     Rücktaste     DEL               Einfg          INS (SHIFT + DEL)
     F1 F3 F5 F7   F1 F3 F5 F7       F2 F4 F6 F8    SHIFT + F1 F3 F5 F7
     Pfeil unten/rechts  Cursor      Pfeil oben/links   SHIFT + Cursor
-
-RESTORE fehlt noch: Die Taste hängt beim C64 nicht im Gitter, sondern am NMI.
+    Bild auf      RESTORE
 """
 import argparse
 import fcntl
@@ -39,12 +41,15 @@ import glob
 import mmap
 import os
 import re
+import signal
 import struct
 import sys
 
 PAGE_BASE = 0x2001_0000     # Anfang der Speicherseite mit den Registern
 KEYS_LO = 0x108 // 4        # Register als Index in 32-Bit-Worten
 KEYS_HI = 0x10C // 4
+STATUS = 0x104 // 4
+STATUS_RESTORE = 2          # Bit 1 von STATUS: Taste RESTORE
 
 # Ein Ereignis von /dev/input/event* (struct input_event, 64-Bit-Linux):
 # Zeit (2 x long), Art, Code, Wert.
@@ -53,6 +58,7 @@ EV_KEY = 1                  # Art: Taste; Wert 0 = los, 1 = gedrückt, 2 = Wiede
 EVIOCGRAB = 0x40044590      # Tastatur allein beanspruchen (sonst tippt man auch in Linux)
 
 RSHIFT = 52                 # rechte SHIFT-Taste im Gitter des C64
+KEY_RESTORE = 104           # Bild auf -> RESTORE (eigenes Register, nicht im Gitter)
 
 # Tastennummer von Linux (linux/input-event-codes.h) -> Tasten im Gitter des
 # C64 (Nummern aus key_matrix.v). Zwei Einträge: SHIFT wird mitgedrückt.
@@ -146,6 +152,11 @@ def write_state(reg, old: int, new: int) -> None:
         reg[KEYS_HI] = hi
 
 
+def stop(signum, frame):
+    """Beenden durch systemd (SIGTERM) wie Strg+C behandeln: Tasten loslassen."""
+    raise KeyboardInterrupt
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("device", nargs="?", help="Gerätedatei der Tastatur (Default: selbst suchen)")
@@ -172,14 +183,16 @@ def main() -> int:
     except OSError as err:
         sys.exit(f"Öffnen fehlgeschlagen (mit sudo gestartet?): {err}")
     fcntl.ioctl(kbd, EVIOCGRAB, 1)
+    signal.signal(signal.SIGTERM, stop)
 
-    print(f"Tastatur {device} geht an den C64. Strg+C auf dieser Konsole beendet.")
+    print(f"Tastatur {device} geht an den C64. Strg+C auf dieser Konsole beendet.", flush=True)
     with mmap.mmap(mem, mmap.PAGESIZE, offset=PAGE_BASE) as page:
         reg = memoryview(page).cast("I")
         pressed: set[int] = set()
         state = 0
         reg[KEYS_LO] = 0
         reg[KEYS_HI] = 0
+        reg[STATUS] = 0
         try:
             while True:
                 data = kbd.read(EVENT.size)
@@ -188,6 +201,9 @@ def main() -> int:
                     break
                 _, _, kind, code, value = EVENT.unpack(data)
                 if kind != EV_KEY or value == 2:
+                    continue
+                if code == KEY_RESTORE:
+                    reg[STATUS] = STATUS_RESTORE if value else 0
                     continue
                 if value:
                     pressed.add(code)
@@ -204,6 +220,7 @@ def main() -> int:
             # Alle Tasten loslassen, sonst bleiben sie im C64 gedrückt.
             reg[KEYS_LO] = 0
             reg[KEYS_HI] = 0
+            reg[STATUS] = 0
             reg.release()
     return 0
 

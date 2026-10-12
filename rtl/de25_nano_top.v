@@ -188,6 +188,7 @@ module de25_nano_top #(
     // Linux (hps_keys_q). Gedrückt ist, was eine der beiden drückt.
     wire [63:0] typer_keys;
     wire [63:0] hps_keys_q;
+    wire        hps_restore_q;      // Taste RESTORE, nur von Linux
     wire        key_fifo_empty;
     wire        key_fifo_full;
     wire [7:0]  key_fifo_data;
@@ -269,6 +270,7 @@ module de25_nano_top #(
         .rst        (rst),
         .uart_txd   (FPGA_UART_TX),
         .keys       (keys),
+        .restore    (hps_restore_q),
         .dma_req    (dma_req),
         .dma_addr   (dma_addr),
         .dma_data   (dma_data),
@@ -464,7 +466,8 @@ module de25_nano_top #(
         .data_q            (hps_data_q),
         .valid_q           (hps_valid_q),
         .ready             (hps_ready),
-        .keys_q            (hps_keys_q)
+        .keys_q            (hps_keys_q),
+        .restore_q         (hps_restore_q)
     );
 
     qsys_top u_qsys_top (
@@ -546,6 +549,7 @@ module de25_nano_top #(
     assign hps_data_q  = 8'h00;
     assign hps_valid_q = 1'b0;
     assign hps_keys_q  = 64'd0;
+    assign hps_restore_q = 1'b0;
 `endif
 
     // --- LEDs ---------------------------------------------------------------

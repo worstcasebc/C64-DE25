@@ -105,7 +105,7 @@ Basis aus Sicht von Linux: `0x2000_0000` (auf dem Board bestätigt).
 | `0x2001_0070` | `dipsw_pio`  | nicht angeschlossen (liest `0`)   |
 | `0x2001_0080` | `led_pio`    | 3 Bit, `LEDR[3:1]`, 1 = an        |
 | `0x2001_0100` | `DATA`       | `hps_byte_port`: Schreiben schickt Bit 7..0 als Byte an den C64; wird ignoriert, solange belegt |
-| `0x2001_0104` | `STATUS`     | `hps_byte_port`: Bit 0 = 1, solange das letzte Byte unterwegs ist |
+| `0x2001_0104` | `STATUS`     | `hps_byte_port`: Bit 0 = 1, solange das letzte Byte unterwegs ist (nur lesen); Bit 1 = 1: Taste RESTORE gedrückt (lesen und schreiben) |
 | `0x2001_0108` | `KEYS_LO`    | `hps_byte_port`: Tasten 31..0 im Gitter des C64, 1 = gedrückt (Nummern wie in `rtl/io/key_matrix.v`) |
 | `0x2001_010C` | `KEYS_HI`    | `hps_byte_port`: Tasten 63..32 |
 
@@ -113,6 +113,11 @@ Basis aus Sicht von Linux: `0x2000_0000` (auf dem Board bestätigt).
 Zustand nach `KEYS_LO` und `KEYS_HI` (auf dem Board bestätigt: Die Tastatur
 am USB-Anschluss des HPS wird erkannt, die Tasten kommen im C64 an). Die
 Belegung steht im Kopf des Skripts.
+
+Der Dienst `sw/py/c64-keys.service` startet das Skript beim Booten
+(Einrichtung steht in der Datei). Auf dem Board bestätigt: Nach einem
+Neustart geht die Tastatur ohne Anmeldung, und RESTORE (Bild auf, `STATUS`
+Bit 1) wirkt zusammen mit RUN/STOP (Esc).
 
 Die Bytes an `DATA` haben dieselbe Bedeutung wie am UART vom PC: Tastendrücke
 und Ladeblöcke. `sw/py/c64_hps.py` schickt sie von Linux aus. Auf dem Board

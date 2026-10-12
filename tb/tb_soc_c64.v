@@ -21,6 +21,10 @@
 // Vom SID wird hier nur geprüft, dass ein Schreibzugriff auf $D418 bei ihm
 // ankommt; seinen Ton prüft tb_sid_tone. Mit PIX_DIV = 1 hat er zu wenige
 // Takte, um Ton zu berechnen.
+//
+// Zum Schluss die Taste RESTORE: Jeder Druck muss genau einen NMI auslösen,
+// auch wenn die Taste lange gehalten wird. Die NMI-Routine des Testprogramms
+// zählt mit; die Testbench liest den Zähler im RAM.
 
 `timescale 1ns / 1ps
 `default_nettype none
@@ -52,12 +56,19 @@ module tb_soc_c64;
     wire        dma_ack;
     integer     dma_errors = 0;
     integer     k;
+    reg         restore = 1'b0;
+    reg [7:0]   nmi_before;
+
+    // Zähler der NMI-Routine im Testprogramm (nmi_count in banktest.s, die
+    // sechste Variable in der Zeropage ab $02).
+    localparam NMI_COUNT = 16'h0007;
 
     soc_c64 #(.PIX_DIV(1), .UART_CLKS_PER_BIT(CLKS_PER_BIT)) dut (
         .clk        (clk),
         .rst        (rst),
         .uart_txd   (txd),
         .keys       (64'd0),
+        .restore    (restore),
         .dma_req    (dma_req),
         .dma_addr   (dma_addr),
         .dma_data   (dma_data),
@@ -115,6 +126,30 @@ module tb_soc_c64;
         if (dut.u_sid.Filter_Mode_Vol[0] !== 8'h0F) begin
             $display("FAIL: SID-Register $18 ist %h, erwartet 0f", dut.u_sid.Filter_Mode_Vol[0]);
             dma_errors = dma_errors + 1;
+        end
+
+        // RESTORE: Die CIA 2 ist inzwischen still, der Zaehler steht.
+        nmi_before = dut.u_ram.mem[NMI_COUNT];
+        repeat (2000) @(posedge clk);
+        if (dut.u_ram.mem[NMI_COUNT] !== nmi_before) begin
+            $display("FAIL: NMI-Zaehler laeuft ohne RESTORE");
+            dma_errors = dma_errors + 1;
+        end
+        for (k = 1; k <= 2; k = k + 1) begin
+            @(negedge clk) restore = 1'b1;
+            repeat (4000) @(posedge clk);       // 500 CPU-Takte gehalten
+            if (dut.u_ram.mem[NMI_COUNT] !== nmi_before + k[7:0]) begin
+                $display("FAIL: RESTORE gehalten, Druck %0d: Zaehler %0d, erwartet %0d", k,
+                         dut.u_ram.mem[NMI_COUNT], nmi_before + k[7:0]);
+                dma_errors = dma_errors + 1;
+            end
+            @(negedge clk) restore = 1'b0;
+            repeat (2000) @(posedge clk);
+            if (dut.u_ram.mem[NMI_COUNT] !== nmi_before + k[7:0]) begin
+                $display("FAIL: RESTORE losgelassen, Druck %0d: Zaehler %0d, erwartet %0d", k,
+                         dut.u_ram.mem[NMI_COUNT], nmi_before + k[7:0]);
+                dma_errors = dma_errors + 1;
+            end
         end
 
         if (errors + dma_errors == 0) $display("PASS: tb_soc_c64");

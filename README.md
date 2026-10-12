@@ -39,7 +39,7 @@ keystrokes and load blocks that the PC sends over the UART.
 Not there yet:
 
 - Keyboard: a USB keyboard works through Linux on the HPS, in the HPS build
-  only and without the RESTORE key. Otherwise keystrokes come from a PC over
+  only. Otherwise keystrokes come from a PC over
   the UART (see [Controlling the C64](#controlling-the-c64)).
 - No disk drive, so no `.D64` support, and no tape or cartridges.
 - No joysticks.
@@ -264,10 +264,13 @@ with a third script, `sw/py/c64_keys.py`:
 sudo python3 c64_keys.py
 ```
 
+To start it at boot, install `sw/py/c64-keys.service` as a systemd unit; the
+steps are at the top of that file.
+
 It passes on which keys are held down, so key combinations and games work.
 Keys are mapped by position, not by what is printed on them: the key right of
 `L` is the colon, as on a C64. Esc is RUN/STOP, Tab is CTRL, left Ctrl is the
-Commodore key; the full table is at the top of the script. RESTORE is missing.
+Commodore key; Page Up is RESTORE; the full table is at the top of the script.
 
 A second register, 3 bits at `0x2001_0080`, switches `LEDR1`–`LEDR3`:
 
