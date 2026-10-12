@@ -48,6 +48,7 @@ set_global_assignment -name VERILOG_FILE ../rtl/mem/fifo_sync.v
 set_global_assignment -name VERILOG_FILE ../rtl/drive/ce_fraction.v
 set_global_assignment -name VERILOG_FILE ../rtl/mem/ram_2clk.v
 set_global_assignment -name VERILOG_FILE ../rtl/drive/hps_disk_port.v
+set_global_assignment -name VERILOG_FILE ../rtl/video/video_osd.v
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/drive/drive_1541.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/drive/vendor/mister_c1541/c1541_multi.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/drive/vendor/mister_c1541/c1541_drv.sv

@@ -432,6 +432,14 @@ module de25_nano_top #(
         .vsync_q (bars_vsync_q)
     );
 
+    // Über dem Bild des C64 liegt mit HPS das Menüfenster von Linux
+    // (video_osd, siehe unten bei "HPS"); ohne HPS geht das Bild direkt
+    // weiter.
+    wire [23:0] osd_rgb_q;
+    wire        osd_de_q;
+    wire        osd_hsync_q;
+    wire        osd_vsync_q;
+
     // Bildquelle wählen und noch einmal registern, damit Farbe und
     // Steuersignale gemeinsam und ohne Logik dahinter an die Pins gehen.
     reg [23:0] hdmi_rgb_q;
@@ -440,10 +448,10 @@ module de25_nano_top #(
     reg        hdmi_vsync_q;
 
     always @(posedge clk_sys) begin
-        hdmi_rgb_q   <= sw0_q ? bars_rgb_q   : c64_rgb_q;
-        hdmi_de_q    <= sw0_q ? bars_de_q    : c64_de_q;
-        hdmi_hsync_q <= sw0_q ? bars_hsync_q : c64_hsync_q;
-        hdmi_vsync_q <= sw0_q ? bars_vsync_q : c64_vsync_q;
+        hdmi_rgb_q   <= sw0_q ? bars_rgb_q   : osd_rgb_q;
+        hdmi_de_q    <= sw0_q ? bars_de_q    : osd_de_q;
+        hdmi_hsync_q <= sw0_q ? bars_hsync_q : osd_hsync_q;
+        hdmi_vsync_q <= sw0_q ? bars_vsync_q : osd_vsync_q;
     end
 
     // Belegung wie in Terasics Demo: D[23:16] Rot, D[15:8] Grün, D[7:0] Blau.
@@ -481,7 +489,8 @@ module de25_nano_top #(
     // c64_m0 und disk_m0 sind zwei Stücke Avalon-Bus, die aus dem System
     // herausgeführt sind (Bridges c64_bridge und disk_bridge, von Hand
     // ergänzt, siehe quartus_hps/README.md). An c64_m0 hängt hps_byte_port
-    // (Bytes, Tasten), an disk_m0 hps_disk_port (Diskette für das Laufwerk).
+    // (Bytes, Tasten), an disk_m0 hps_disk_port (Diskette für das Laufwerk)
+    // und video_osd (Menüfenster im Bild).
     wire [2:0] hps_led;
 
 `ifdef ENABLE_HPS
@@ -565,6 +574,27 @@ module de25_nano_top #(
         .img_present       (disk_present),
         .img_readonly      (disk_readonly),
         .gcr_mode          (disk_gcr_mode)
+    );
+
+    // Das Menüfenster teilt sich den Bus mit hps_disk_port: Es hört nur auf
+    // Schreibzugriffe im Bereich 0x1000 bis 0x1FFF, den hps_disk_port nicht
+    // benutzt (und beim Lesen mit 0 beantwortet).
+    video_osd #(.CHAR_FILE(CHAR_FILE)) u_video_osd (
+        .clk_av         (clk_100),
+        .rst_av         (rst_av),
+        .avs_address    (disk_m0_address[11:2]),
+        .avs_write      (disk_m0_write && disk_m0_address[13:12] == 2'b01),
+        .avs_writedata  (disk_m0_writedata),
+        .avs_byteenable (disk_m0_byteenable),
+        .clk            (clk_sys),
+        .rgb            (c64_rgb_q),
+        .de             (c64_de_q),
+        .hsync          (c64_hsync_q),
+        .vsync          (c64_vsync_q),
+        .rgb_q          (osd_rgb_q),
+        .de_q           (osd_de_q),
+        .hsync_q        (osd_hsync_q),
+        .vsync_q        (osd_vsync_q)
     );
 
     qsys_top u_qsys_top (
@@ -657,6 +687,10 @@ module de25_nano_top #(
     assign hps_valid_q = 1'b0;
     assign hps_keys_q  = 64'd0;
     assign hps_restore_q = 1'b0;
+    assign osd_rgb_q     = c64_rgb_q;
+    assign osd_de_q      = c64_de_q;
+    assign osd_hsync_q   = c64_hsync_q;
+    assign osd_vsync_q   = c64_vsync_q;
     assign disk_present  = 1'b0;
     assign disk_mounted  = 1'b0;
     assign disk_readonly = 1'b0;

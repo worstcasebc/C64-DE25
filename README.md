@@ -42,11 +42,10 @@ Not there yet:
   only. Otherwise keystrokes come from a PC over
   the UART (see [Controlling the C64](#controlling-the-c64)).
 - Disks: a 1541 disk drive reads `.D64` images that Linux on the HPS supplies
-  (HPS build only). Not yet: writing to the disk, `.G64` images (prepared but
-  untried), and choosing the image from the C64. No tape or cartridges.
+  (HPS build only), chosen from a menu on the screen. Not yet: writing to the
+  disk and `.G64` images (prepared but untried). No tape or cartridges.
 - No joysticks.
 - PAL only.
-- A menu or file browser on the HPS.
 
 ### What is inside
 
@@ -183,7 +182,15 @@ sudo python3 c64_hps.py --load game.prg --run     load a program and type RUN
 The bytes go through a register at `0x2001_0100` into the same path as the
 bytes from the PC, so do not load from both sides at the same time.
 
-A disk image is inserted into the 1541 drive with `sw/py/c64_disk.py`:
+The comfortable way is the service `sw/py/c64d.py`, which combines USB
+keyboard, disk drive and a menu: F12 opens a window on top of the picture
+that lists the `.d64`, `.g64` and `.prg` files on a USB stick (FAT32); Enter
+inserts the disk or loads the program. The C64 keeps running underneath, so a
+disk can be changed in the middle of a game. Setting it up is described in
+[INSTALL.md](INSTALL.md), section D6.
+
+The single steps also exist as scripts of their own. A disk image is inserted
+into the 1541 drive with `sw/py/c64_disk.py`:
 
 ```
 sudo python3 c64_disk.py game.d64

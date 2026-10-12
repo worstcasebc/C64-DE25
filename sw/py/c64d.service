@@ -1,0 +1,28 @@
+# c64d.service — startet c64d.py beim Booten von Linux auf dem HPS.
+#
+# Damit sind ohne Anmeldung da: die USB-Tastatur als Tastatur des C64, das
+# Diskettenlaufwerk und das Menü (F12). Der Dienst läuft als root (nötig für
+# /dev/mem, die Tastatur und das Einhängen des USB-Sticks).
+#
+# Er ersetzt c64-keys.service; beide zugleich würden sich um die Tastatur
+# streiten. Den alten Dienst deshalb vorher abschalten:
+#   sudo systemctl disable --now c64-keys
+#
+# Einrichten (auf dem Board; die Skripte c64d.py, c64_keys.py, c64_disk.py
+# und c64_blocks.py liegen in /home/terasic):
+#   sudo cp c64d.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now c64d
+# Nachsehen:   systemctl status c64d
+# Abschalten:  sudo systemctl disable --now c64d
+
+[Unit]
+Description=C64: USB-Tastatur, Diskettenlaufwerk und Menue
+
+[Service]
+ExecStart=/usr/bin/python3 /home/terasic/c64d.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

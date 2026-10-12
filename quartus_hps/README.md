@@ -96,6 +96,8 @@ Basis aus Sicht von Linux: `0x2000_0000` (auf dem Board bestätigt).
 | `0x2001_4000` | `REQUEST`    | `hps_disk_port`: Anforderung des Laufwerks — Bit 0 lesen, Bit 1 schreiben, Bit 13..8 Anzahl Blöcke − 1, Bit 31..16 erster Block |
 | `0x2001_4004` | `CONTROL`    | `hps_disk_port`: schreiben 1 = geliefert; lesen Bit 0 = beschäftigt |
 | `0x2001_4008` | `MOUNT`      | `hps_disk_port`: Bit 0 Diskette vorhanden, Bit 1 Schreibschutz, Bit 2 Format (0 = `.D64`, 1 = `.G64`) |
+| `0x2001_5000` | OSD sichtbar | `video_osd`: Bit 0 = 1 zeigt das Menüfenster, nur schreiben |
+| `0x2001_5800` | OSD Text     | `video_osd`: 512 Worte, je ein Zeichen (Bit 7..0, Bildschirmcode des C64, ab 128 invers), 32 Spalten × 16 Zeilen, nur schreiben |
 | `0x2001_6000` | Puffer       | `hps_disk_port`: 8192 Bytes für die gelieferten Blöcke, nur schreiben |
 
 `sw/py/c64_disk.py <Abbild>` legt eine `.D64` oder `.G64` in das Laufwerk
@@ -104,6 +106,14 @@ Basis aus Sicht von Linux: `0x2000_0000` (auf dem Board bestätigt).
 ausprobiert ist `.G64`; Schreiben auf die Diskette ist nicht umgesetzt, die
 Diskette wird mit Schreibschutz eingelegt. Ohne eingelegte Diskette bleibt
 das Laufwerk im Reset.
+
+`sw/py/c64d.py` fasst Tastatur, Laufwerk und ein Menü zusammen: F12 blendet
+ein Fenster über das Bild (`rtl/video/video_osd.v`), in dem man eine Diskette
+oder ein Programm vom USB-Stick (FAT32) wählt. Auf dem Board bestätigt: Menü,
+Einlegen einer `.D64` vom Stick, Laden eines Spiels über mehrere Spuren,
+Laden eines `.PRG`. Er ersetzt die beiden einzelnen Skripte unten, die weiter
+für sich benutzbar bleiben — aber nie gleichzeitig mit dem Dienst; die
+Skripte prüfen das selbst und brechen sonst ab.
 
 `sw/py/c64_keys.py` liest eine USB-Tastatur unter Linux und schreibt den
 Zustand nach `KEYS_LO` und `KEYS_HI` (auf dem Board bestätigt: Die Tastatur

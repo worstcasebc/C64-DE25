@@ -152,6 +152,21 @@ def write_state(reg, old: int, new: int) -> None:
         reg[KEYS_HI] = hi
 
 
+def claim(what: str):
+    """Sorgt dafür, dass nur ein Programm zugleich diese Hardware bedient.
+
+    Zwei Lieferanten für dasselbe Laufwerk oder zwei Besitzer derselben
+    Tastatur kommen sich in die Quere, ohne dass es eine Fehlermeldung gäbe.
+    Die Sperre hängt an einer offenen Datei und verschwindet mit dem Programm.
+    """
+    handle = open(f"/run/c64-{what}.lock", "w")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        sys.exit(f"Ein anderes Programm bedient schon: {what}. Läuft der Dienst c64d "
+                 "(sudo systemctl stop c64d) oder ein zweites Skript?")
+    return handle
+
 def stop(signum, frame):
     """Beenden durch systemd (SIGTERM) wie Strg+C behandeln: Tasten loslassen."""
     raise KeyboardInterrupt
@@ -177,6 +192,7 @@ def main() -> int:
             sys.exit("Keine Tastatur gefunden. Angesteckt? Sonst Gerätedatei angeben.")
         device = by_id[0]
 
+    lock = claim("tastatur")
     try:
         kbd = open(device, "rb", buffering=0)
         mem = os.open("/dev/mem", os.O_RDWR | os.O_SYNC)

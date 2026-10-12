@@ -288,6 +288,7 @@ These files go into `/home/terasic` on the board:
 | `sw/py/c64_keys.py` | USB keyboard |
 | `sw/py/c64-keys.service` | starting the keyboard at boot |
 | `sw/py/c64_disk.py` | inserting a disk |
+| `sw/py/c64d.py`, `sw/py/c64d.service` | keyboard, disk drive and menu in one service; needs `c64_keys.py`, `c64_disk.py` and `c64_blocks.py` next to it |
 | your `.prg`, `.d64` and `.g64` files | |
 
 Over the network, if the board is connected and the card image runs an SSH
@@ -353,6 +354,66 @@ on the C64: `LOAD "$",8` and `LIST`, or `LOAD "*",8,1` and `RUN`. Confirmed
 with a `.D64` image; `.G64` images are prepared but untried, and the disk is
 write-protected.
 
+### D6. Keyboard, disk drive and menu in one service
+
+`c64d.py` does what `c64_keys.py` and `c64_disk.py` do, and adds a menu: F12
+on the USB keyboard opens a window on top of the picture, in which a disk
+image or a program is chosen. The C64 keeps running underneath, so this also
+works when a game asks for the next disk.
+
+1. Put the `.d64`, `.g64` and `.prg` files into the top folder of a USB stick
+   formatted as **FAT32** and plug it into a USB hub together with the
+   keyboard. Terasic's Linux cannot read exFAT, the format in which many
+   sticks are sold; reformat such a stick on the PC. Without a stick the
+   service lists the files in its own folder (`/home/terasic`); the line
+   above the bottom of the menu says which source is in use. The stick can
+   be unplugged and plugged in again while the service runs; the next time
+   the menu is opened it uses whatever is there.
+2. Stop the keyboard service from D4, if it is installed — two programs
+   cannot own the keyboard at the same time:
+
+   ```
+   sudo systemctl disable --now c64-keys
+   ```
+3. Try it by hand (Ctrl+C on the console ends it):
+
+   ```
+   sudo python3 c64d.py
+   ```
+
+   | Key | In the menu |
+   |-----|-------------|
+   | F12 | open and close the menu |
+   | arrow up/down, Page Up/Down | choose an entry |
+   | Enter | insert the `.d64`/`.g64`, or load the `.prg` (a BASIC program is started with RUN) |
+   | Esc | close the menu |
+
+4. Start it at every boot:
+
+   ```
+   sudo cp c64d.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now c64d
+   systemctl status c64d
+   ```
+
+Only one program at a time may serve the keyboard and the disk drive. The
+scripts check this themselves: a second `c64d.py`, or `c64_keys.py` or
+`c64_disk.py` next to it, ends at once with a message. To run `c64d.py` by
+hand while the service is installed, stop the service first:
+
+```
+sudo systemctl stop c64d
+sudo python3 c64d.py -v
+```
+
+With `-v` it prints every request of the disk drive and, every two seconds,
+the state of the registers — the first thing to look at when loading fails.
+`systemctl is-active c64d c64-keys` shows what is running in the background.
+
+After inserting a disk, give the drive about three seconds before the first
+`LOAD`.
+
 ## After changes
 
 | What changed | Do again |
@@ -362,5 +423,5 @@ write-protected.
 | `COMMIT` in `fetch_mister.py` or a patch | A2, then compile and load |
 | Windows was restarted | C2 |
 | `fetch_ghrd.py` was run again | C3 and C4 |
-| a script under `sw/py` that runs on the board | D3; for `c64_keys.py` then `sudo systemctl restart c64-keys` |
+| a script under `sw/py` that runs on the board | D3, then restart the service that uses it (`sudo systemctl restart c64d` or `c64-keys`) |
 | the board was powered off | D1 |
