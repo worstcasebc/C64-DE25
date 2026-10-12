@@ -1,12 +1,16 @@
-// de25_nano_top — Top-Level, Stand Meilenstein 6 (VIC-II und SID über HDMI).
+// de25_nano_top — Top-Level, Stand Meilenstein 7 (C64 neben dem HPS).
 //
-// Zweck:  Verdrahtet den C64-Rechner mit dem Board.
+// Zweck:  Verdrahtet den C64-Rechner mit dem Board. Mit dem Makro ENABLE_HPS
+//         (gesetzt im Projekt quartus_hps/) kommt das HPS dazu, auf dem Linux
+//         läuft; ohne das Makro (Projekt quartus/) bleibt es beim C64 allein.
 //           KEY[0]    Reset
 //           SW[0]     1 zeigt statt des C64-Bildes das Testbild mit
 //                     Farbbalken
 //           LEDR[0]   1-Hz-Herzschlag aus clk_sys — blinkt nur, wenn die
 //                     PLL läuft
-//           LEDR[7:1] aus. Zum Fehlersuchen stehen intern Signale bereit,
+//           LEDR[3:1] nur mit HPS: von Linux aus schaltbar (Register
+//                     led_pio), als Nachweis, dass die Brücke zum FPGA läuft
+//           übrige LEDs aus. Zum Fehlersuchen stehen intern Signale bereit,
 //                     siehe unten in "LEDs".
 //           FPGA_UART_TX  Textausgabe des 6502-Programms, 115200 Baud 8N1,
 //                     über den FTDI-Chip am Type-C-Anschluss
@@ -24,11 +28,18 @@
 //         wechseln mit clk_sys, der Sender übernimmt sie eine halbe Periode
 //         später, mitten im gültigen Bereich.
 //         Asynchrone Eingänge kommen nur über sync_2ff herein.
+//         Mit HPS gibt es eine zweite Domäne: clk_100 (100 MHz aus der PLL
+//         "pll" an CLOCK2_50) für die Brücken zwischen HPS und FPGA. Zwischen
+//         ihr und clk_sys läuft bisher kein Signal.
 // Ports:  Namen wie im Terasic-Handbuch (Großschreibung nur hier im Top-Level).
 //         KEY und LEDR sind low-aktiv; intern wird alles high-aktiv geführt.
 // IP:     pll_c64 (50 MHz -> 2 x 31,5 MHz, 0 und 180 Grad) und reset_release
 //         sind Intel-IP (quartus/ip/*.ip) und nicht simulierbar — deshalb
 //         bleibt hier nur Verdrahtung.
+//         Mit HPS: qsys_top ist das Platform-Designer-System aus Terasics
+//         Beispiel GHRD (quartus_hps/, siehe README dort). Es enthält das
+//         HPS, dessen Speicher LPDDR4A und die Register an der Brücke; das
+//         Signal ninit_done kommt dann von dort statt von reset_release.
 
 `default_nettype none
 
@@ -58,6 +69,52 @@ module de25_nano_top #(
     output wire        HDMI_SCLK,
     output wire        HDMI_LRCLK,
     output wire        HDMI_I2S
+
+`ifdef ENABLE_HPS
+    ,
+    input  wire        CLOCK2_50,
+
+    // Speicher des HPS (läuft über Pins des FPGA)
+    input  wire        LPDDR4A_REFCLK_p,
+    output wire        LPDDR4A_CS_n,
+    output wire [5:0]  LPDDR4A_CA,
+    output wire        LPDDR4A_CK,
+    output wire        LPDDR4A_CKE,
+    output wire        LPDDR4A_CK_n,
+    inout  wire [3:0]  LPDDR4A_DM,
+    inout  wire [31:0] LPDDR4A_DQ,
+    inout  wire [3:0]  LPDDR4A_DQS,
+    inout  wire [3:0]  LPDDR4A_DQS_n,
+    output wire        LPDDR4A_RESET_n,
+    input  wire        LPDDR4A_RZQ,
+
+    // Anschlüsse des HPS: Netzwerk, SD-Karte, UART, USB, I2C, Taster, LED
+    input  wire        HPS_CLK_25,
+    output wire        HPS_ENET_MDC,
+    inout  wire        HPS_ENET_MDIO,
+    input  wire        HPS_ENET_RX_CLK,
+    input  wire        HPS_ENET_RX_CTL,
+    input  wire [3:0]  HPS_ENET_RX_DATA,
+    output wire        HPS_ENET_TX_CLK,
+    output wire        HPS_ENET_TX_CTL,
+    output wire [3:0]  HPS_ENET_TX_DATA,
+    inout  wire        HPS_GSENSOR_I2C_EN,
+    inout  wire        HPS_GSENSOR_INT,
+    inout  wire        HPS_I2C_SCL,
+    inout  wire        HPS_I2C_SDA,
+    inout  wire        HPS_KEY,
+    inout  wire        HPS_LED,
+    output wire        HPS_SD_CLK,
+    inout  wire        HPS_SD_CMD,
+    inout  wire [3:0]  HPS_SD_DATA,
+    input  wire        HPS_UART_RX,
+    output wire        HPS_UART_TX,
+    input  wire        HPS_USB_CLK,
+    inout  wire [7:0]  HPS_USB_DATA,
+    input  wire        HPS_USB_DIR,
+    input  wire        HPS_USB_NXT,
+    output wire        HPS_USB_STP
+`endif
 );
 
     // Takte pro Zeiteinheit bei 31,5 MHz
@@ -71,9 +128,11 @@ module de25_nano_top #(
     // --- Reset Release und PLL ----------------------------------------------
     wire ninit_done;
 
+`ifndef ENABLE_HPS
     reset_release u_reset_release (
         .ninit_done (ninit_done)
     );
+`endif
 
     wire clk_sys;
     wire clk_sys_180;
@@ -337,11 +396,95 @@ module de25_nano_top #(
     assign HDMI_I2C_SCL = ~hdmi_scl_oe_q;
     assign HDMI_I2C_SDA = hdmi_sda_oe_q ? 1'b0 : 1'bz;
 
+    // --- HPS -----------------------------------------------------------------
+    // Verdrahtung wie in Terasics golden_top.v. Die Register für Taster und
+    // Schalter gibt es im System noch, sie sind hier aber nicht angeschlossen.
+    wire [2:0] hps_led;
+
+`ifdef ENABLE_HPS
+    wire clk_100;
+
+    pll u_pll_hps (
+        .refclk   (CLOCK2_50),
+        .locked   (),
+        .rst      (ninit_done),
+        .outclk_0 (clk_100)
+    );
+
+    qsys_top u_qsys_top (
+        .clk_100_clk                           (clk_100),
+        .reset_reset_n                         (~ninit_done),
+        .ninit_done_ninit_done                 (ninit_done),
+        .led_pio_external_connection_in_port   (hps_led),
+        .led_pio_external_connection_out_port  (hps_led),
+        .dipsw_pio_external_connection_export  (4'b0000),
+        .button_pio_external_connection_export (4'b1111),
+
+        .hps_io_hps_osc_clk                    (HPS_CLK_25),
+        .emif_hps_emif_mem_0_mem_cs            (LPDDR4A_CS_n),
+        .emif_hps_emif_mem_0_mem_ca            (LPDDR4A_CA),
+        .emif_hps_emif_mem_0_mem_cke           (LPDDR4A_CKE),
+        .emif_hps_emif_mem_0_mem_dq            (LPDDR4A_DQ),
+        .emif_hps_emif_mem_0_mem_dqs_t         (LPDDR4A_DQS),
+        .emif_hps_emif_mem_0_mem_dqs_c         (LPDDR4A_DQS_n),
+        .emif_hps_emif_mem_0_mem_dmi           (LPDDR4A_DM),
+        .emif_hps_emif_mem_ck_0_mem_ck_t       (LPDDR4A_CK),
+        .emif_hps_emif_mem_ck_0_mem_ck_c       (LPDDR4A_CK_n),
+        .emif_hps_emif_mem_reset_n_mem_reset_n (LPDDR4A_RESET_n),
+        .emif_hps_emif_oct_0_oct_rzqin         (LPDDR4A_RZQ),
+        .emif_hps_emif_ref_clk_0_clk           (LPDDR4A_REFCLK_p),
+        .hps_io_emac0_tx_clk                   (HPS_ENET_TX_CLK),
+        .hps_io_emac0_rx_clk                   (HPS_ENET_RX_CLK),
+        .hps_io_emac0_tx_ctl                   (HPS_ENET_TX_CTL),
+        .hps_io_emac0_rx_ctl                   (HPS_ENET_RX_CTL),
+        .hps_io_emac0_txd0                     (HPS_ENET_TX_DATA[0]),
+        .hps_io_emac0_txd1                     (HPS_ENET_TX_DATA[1]),
+        .hps_io_emac0_txd2                     (HPS_ENET_TX_DATA[2]),
+        .hps_io_emac0_txd3                     (HPS_ENET_TX_DATA[3]),
+        .hps_io_emac0_rxd0                     (HPS_ENET_RX_DATA[0]),
+        .hps_io_emac0_rxd1                     (HPS_ENET_RX_DATA[1]),
+        .hps_io_emac0_rxd2                     (HPS_ENET_RX_DATA[2]),
+        .hps_io_emac0_rxd3                     (HPS_ENET_RX_DATA[3]),
+        .hps_io_mdio0_mdio                     (HPS_ENET_MDIO),
+        .hps_io_mdio0_mdc                      (HPS_ENET_MDC),
+        .hps_io_sdmmc_cclk                     (HPS_SD_CLK),
+        .hps_io_sdmmc_cmd                      (HPS_SD_CMD),
+        .hps_io_sdmmc_data0                    (HPS_SD_DATA[0]),
+        .hps_io_sdmmc_data1                    (HPS_SD_DATA[1]),
+        .hps_io_sdmmc_data2                    (HPS_SD_DATA[2]),
+        .hps_io_sdmmc_data3                    (HPS_SD_DATA[3]),
+        .hps_io_uart1_rx                       (HPS_UART_RX),
+        .hps_io_uart1_tx                       (HPS_UART_TX),
+        .hps_io_usb0_clk                       (HPS_USB_CLK),
+        .hps_io_usb0_stp                       (HPS_USB_STP),
+        .hps_io_usb0_dir                       (HPS_USB_DIR),
+        .hps_io_usb0_nxt                       (HPS_USB_NXT),
+        .hps_io_usb0_data0                     (HPS_USB_DATA[0]),
+        .hps_io_usb0_data1                     (HPS_USB_DATA[1]),
+        .hps_io_usb0_data2                     (HPS_USB_DATA[2]),
+        .hps_io_usb0_data3                     (HPS_USB_DATA[3]),
+        .hps_io_usb0_data4                     (HPS_USB_DATA[4]),
+        .hps_io_usb0_data5                     (HPS_USB_DATA[5]),
+        .hps_io_usb0_data6                     (HPS_USB_DATA[6]),
+        .hps_io_usb0_data7                     (HPS_USB_DATA[7]),
+        .hps_io_i2c1_sda                       (HPS_I2C_SDA),
+        .hps_io_i2c1_scl                       (HPS_I2C_SCL),
+        .hps_io_gpio28                         (HPS_GSENSOR_INT),
+        .hps_io_gpio34                         (HPS_GSENSOR_I2C_EN),
+        .hps_io_gpio40                         (HPS_KEY),
+        .hps_io_gpio41                         (HPS_LED)
+    );
+`else
+    assign hps_led = 3'b000;
+`endif
+
     // --- LEDs ---------------------------------------------------------------
-    // Interne Sicht: 1 = LED an. Nur der Herzschlag ist angeschlossen.
+    // Interne Sicht: 1 = LED an. LED 0 ist der Herzschlag, LED 1 bis 3
+    // schaltet Linux (nur mit HPS). hps_led gehört zur Domäne clk_100 und
+    // geht ohne Synchronizer hinaus: Es ist nur fürs Auge.
     // Zum Fehlersuchen bieten sich an: hdmi_ready_q, hdmi_nack_q,
     // key_fifo_full, typer_busy, loader_active, rst.
-    wire [7:0] led = {7'b0, heartbeat_q};
+    wire [7:0] led = {4'b0, hps_led, heartbeat_q};
 
     assign LEDR = ~led;
 

@@ -36,3 +36,12 @@ quartus/serv_req_info.txt
 
 # Testprogramme aus fremden Veröffentlichungen (nicht einchecken)
 sw/prg/
+
+# HPS-Projekt: nur die eigenen Dateien einchecken. Alles andere ist Erzeugnis
+# oder stammt aus Terasics GHRD und darf nicht weitergegeben werden
+# (holen mit sw/py/fetch_ghrd.py, siehe quartus_hps/README.md).
+quartus_hps/**
+!quartus_hps/README.md
+!quartus_hps/*.qpf
+!quartus_hps/*.qsf
+!quartus_hps/*.bat
