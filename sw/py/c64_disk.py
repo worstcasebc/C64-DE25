@@ -16,7 +16,8 @@ der Abbilddatei und schreibt sie in den Puffer von rtl/drive/hps_disk_port.v:
                           Block (ein Block = 256 Bytes)
     0x2001_4004  CONTROL  schreiben 1: geliefert; lesen Bit 0: beschäftigt
     0x2001_4008  MOUNT    Bit 0 = Diskette vorhanden, Bit 1 = Schreibschutz,
-                          Bit 2 = Format (0 = .D64, 1 = .G64)
+                          Bit 2 = Format (0 = .D64, 1 = .G64),
+                          Bit 3 = Laufwerk eingeschaltet
     0x2001_6000  Puffer, 8192 Bytes
 Eine .D64 ist einfach die Folge aller Sektoren; Block N steht in der Datei
 ab Byte N * 256. Bei einer .G64 ist ein "Block" eine halbe Spur; wo sie in
@@ -45,6 +46,7 @@ BUFFER = 0x2000 // 4
 MOUNT_PRESENT = 1
 MOUNT_READONLY = 2
 MOUNT_G64 = 4
+MOUNT_DRIVE_ON = 8          # Laufwerk eingeschaltet (sonst ruht es im Reset)
 
 BLOCK = 256
 D64_SIZES = (174848, 175531, 196608, 197376)   # 35/40 Spuren, ohne/mit Fehlerliste
@@ -120,7 +122,8 @@ def main() -> int:
         reg = memoryview(page).cast("I")
         served = 0
         try:
-            reg[MOUNT] = MOUNT_PRESENT | MOUNT_READONLY | (MOUNT_G64 if is_g64 else 0)
+            reg[MOUNT] = (MOUNT_DRIVE_ON | MOUNT_PRESENT | MOUNT_READONLY
+                          | (MOUNT_G64 if is_g64 else 0))
             print(f"{args.image.name} eingelegt ({'.G64' if is_g64 else '.D64'}, schreibgeschützt). "
                   "Strg+C nimmt die Diskette heraus.", flush=True)
             while True:

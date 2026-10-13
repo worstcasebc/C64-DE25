@@ -267,8 +267,11 @@ file to load — after every build.
 The QSPI flash is not touched, so the design is gone after a power cycle and
 has to be loaded again.
 
-Picture and sound come out of the HDMI connector. `LEDR0` blinks at 1 Hz when
-the design runs.
+Picture and sound come out of the HDMI connector. `LEDR0` shows the state:
+in the HPS variant it blinks fast until the service from D6 runs (Linux
+needs a while to boot; until then keyboard, disk drive and menu do not
+work), then it is lit; slow blinking means the service reports a problem.
+Without the HPS it blinks at 1 Hz when the design runs.
 
 ### D2. Serial ports
 
@@ -420,7 +423,9 @@ the state of the registers — the first thing to look at when loading fails.
 `systemctl is-active c64d c64-keys` shows what is running in the background.
 
 After inserting a disk, give the drive about three seconds before the first
-`LOAD`.
+`LOAD`. The drive stays switched on as long as the service runs, with or
+without a disk, so a game that asks for the next disk finds its loader still
+in the drive after the change.
 
 A `.d64` inserted through the menu can be written to (`SAVE`, saved games):
 what the C64 writes is in the file one second later. Before the first change

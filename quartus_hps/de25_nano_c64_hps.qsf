@@ -18,6 +18,7 @@ set_global_assignment -name VERILOG_FILE ../rtl/io/uart_rx.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/key_matrix.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/ascii_key_typer.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/prg_loader.v
+set_global_assignment -name VERILOG_FILE ../rtl/io/hps_status_led.v
 set_global_assignment -name VERILOG_FILE ../rtl/io/hps_byte_port.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/video_timing.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/video_colorbars.v

@@ -6,11 +6,14 @@
 //           KEY[0]    Reset
 //           SW[0]     1 zeigt statt des C64-Bildes das Testbild mit
 //                     Farbbalken
-//           LEDR[0]   1-Hz-Herzschlag aus clk_sys — blinkt nur, wenn die
-//                     PLL läuft
-//           LEDR[3:1] nur mit HPS: von Linux aus schaltbar (Register
-//                     led_pio), als Nachweis, dass die Brücke zum FPGA läuft
-//           LEDR[4]   Leuchte des Diskettenlaufwerks 1541
+//           LEDR[0]   Zustand. Mit HPS (hps_status_led): blinkt schnell,
+//                     solange der Dienst unter Linux fehlt (Linux bootet
+//                     noch); leuchtet, wenn er läuft; blinkt langsam, wenn
+//                     er ein Problem meldet. Ohne HPS: 1-Hz-Herzschlag aus
+//                     clk_sys — blinkt nur, wenn die PLL läuft.
+//           LEDR[1]   Leuchte des Diskettenlaufwerks 1541
+//           LEDR[2]   nur mit HPS: Die Diskette hat Änderungen, die noch
+//                     nicht in der Datei stehen — nicht ausschalten
 //           übrige LEDs aus. Zum Fehlersuchen stehen intern Signale bereit,
 //                     siehe unten in "LEDs".
 //           FPGA_UART_TX  Textausgabe des 6502-Programms, 115200 Baud 8N1,
@@ -309,10 +312,13 @@ module de25_nano_top #(
     // Hängt wie beim echten C64 am seriellen Bus. Die Diskette liefert Linux
     // (hps_disk_port, siehe unten bei "HPS"): Das Laufwerk fordert Spuren an
     // (sd_rd, sd_lba), Linux schickt sie aus der Abbilddatei.
-    // Solange keine Diskette eingelegt ist, bleibt das Laufwerk im Reset —
-    // wie ausgeschaltet. Sonst wartete es ewig auf seine erste Spur. Ohne
-    // HPS gibt es keine Diskette, also auch kein Laufwerk am Bus.
+    // Das Laufwerk läuft nur, solange Linux es eingeschaltet hat
+    // (disk_drive_on) — also solange dort ein Lieferant seine Anforderungen
+    // bedient; sonst wartete es ewig auf seine erste Spur. Ob eine Diskette
+    // eingelegt ist, spielt dafür keine Rolle: Beim Wechsel bleibt es an.
+    // Ohne HPS gibt es keinen Lieferanten, also auch kein Laufwerk am Bus.
     wire        drive_led;
+    wire        disk_drive_on;
     wire        disk_present;
     wire        disk_mounted;
     wire        disk_readonly;
@@ -329,7 +335,7 @@ module de25_nano_top #(
 
     drive_1541 u_drive_1541 (
         .clk          (clk_sys),
-        .rst          (rst | ~disk_present),
+        .rst          (rst | ~disk_drive_on),
         .iec_atn_i    (iec_atn),
         .iec_clk_i    (iec_clk_c64),
         .iec_data_i   (iec_data_c64),
@@ -492,14 +498,17 @@ module de25_nano_top #(
     assign HDMI_I2C_SDA = hdmi_sda_oe_q ? 1'b0 : 1'bz;
 
     // --- HPS -----------------------------------------------------------------
-    // Verdrahtung wie in Terasics golden_top.v. Die Register für Taster und
-    // Schalter gibt es im System noch, sie sind hier aber nicht angeschlossen.
+    // Verdrahtung wie in Terasics golden_top.v. Die Register für Taster,
+    // Schalter und LEDs (led_pio) gibt es im System noch, sie sind hier aber
+    // nicht angeschlossen; die LEDs des Boards zeigen jetzt Zustände an.
     // c64_m0 und disk_m0 sind zwei Stücke Avalon-Bus, die aus dem System
     // herausgeführt sind (Bridges c64_bridge und disk_bridge, von Hand
     // ergänzt, siehe quartus_hps/README.md). An c64_m0 hängt hps_byte_port
     // (Bytes, Tasten), an disk_m0 hps_disk_port (Diskette für das Laufwerk)
     // und video_osd (Menüfenster im Bild).
-    wire [2:0] hps_led;
+    wire [2:0] hps_led;         // led_pio von Terasic, nicht mehr an den LEDs
+    wire       status_led;
+    wire       unsaved_led;
 
 `ifdef ENABLE_HPS
     wire clk_100;
@@ -585,7 +594,22 @@ module de25_nano_top #(
         .img_mounted       (disk_mounted),
         .img_present       (disk_present),
         .img_readonly      (disk_readonly),
-        .gcr_mode          (disk_gcr_mode)
+        .gcr_mode          (disk_gcr_mode),
+        .drive_on          (disk_drive_on)
+    );
+
+    // Zustands-LED: Der Dienst unter Linux meldet sich regelmäßig mit einem
+    // Schreibzugriff auf Wort 3 des Bereichs von hps_disk_port (0x2001_400C),
+    // das jenes Modul nicht benutzt. Alles bleibt im Takt der Brücke; die
+    // Ausgänge gehen nur an LEDs.
+    hps_status_led u_hps_status_led (
+        .clk     (clk_100),
+        .rst     (rst_av),
+        .wr      (disk_m0_write && disk_m0_address[13:2] == 12'd3 && disk_m0_byteenable[0]),
+        .wr_data (disk_m0_writedata[1:0]),
+        .alive_q (),
+        .led_q   (status_led),
+        .aux_q   (unsaved_led)
     );
 
     // Das Menüfenster teilt sich den Bus mit hps_disk_port: Es hört nur auf
@@ -695,6 +719,8 @@ module de25_nano_top #(
     );
 `else
     assign hps_led     = 3'b000;
+    assign status_led  = heartbeat_q;    // ohne HPS: Herzschlag
+    assign unsaved_led = 1'b0;
     assign hps_data_q  = 8'h00;
     assign hps_valid_q = 1'b0;
     assign hps_keys_q  = 64'd0;
@@ -706,6 +732,7 @@ module de25_nano_top #(
     assign osd_de_q      = c64_de_q;
     assign osd_hsync_q   = c64_hsync_q;
     assign osd_vsync_q   = c64_vsync_q;
+    assign disk_drive_on = 1'b0;
     assign disk_present  = 1'b0;
     assign disk_mounted  = 1'b0;
     assign disk_readonly = 1'b0;
@@ -717,13 +744,14 @@ module de25_nano_top #(
 `endif
 
     // --- LEDs ---------------------------------------------------------------
-    // Interne Sicht: 1 = LED an. LED 0 ist der Herzschlag, LED 1 bis 3
-    // schaltet Linux (nur mit HPS). hps_led gehört zur Domäne clk_100 und
-    // geht ohne Synchronizer hinaus: Es ist nur fürs Auge. LED 4 ist die
-    // Leuchte des Laufwerks.
+    // Interne Sicht: 1 = LED an. LED 0 zeigt den Zustand (siehe Kopf), LED 1
+    // ist die Leuchte des Laufwerks, LED 2 warnt vor ungespeicherten
+    // Änderungen an der Diskette. status_led und unsaved_led gehören mit HPS
+    // zur Domäne clk_100 und gehen ohne Synchronizer hinaus: Sie sind nur
+    // fürs Auge.
     // Zum Fehlersuchen bieten sich an: hdmi_ready_q, hdmi_nack_q,
     // key_fifo_full, typer_busy, loader_active, rst.
-    wire [7:0] led = {3'b0, drive_led, hps_led, heartbeat_q};
+    wire [7:0] led = {5'b0, unsaved_led, drive_led, status_led};
 
     assign LEDR = ~led;
 

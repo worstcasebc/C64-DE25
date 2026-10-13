@@ -21,6 +21,8 @@
 //   7. "Geliefert" ohne Anforderung bleibt folgenlos.
 //   8. Reset des C64 mitten in der Lieferung: sd_ack fällt, der Port ist
 //      danach frei; die eingelegte Diskette bleibt.
+//   9. Laufwerk ein und aus (MOUNT Bit 3) ist unabhängig von der Diskette:
+//      Beim Herausnehmen und Einlegen bleibt es an.
 
 `timescale 1ns / 1ps
 `default_nettype none
@@ -57,6 +59,7 @@ module tb_hps_disk_port;
     wire        img_present;
     wire        img_readonly;
     wire        gcr_mode;
+    wire        drive_on;
 
     integer     errors = 0;
     integer     i;
@@ -87,7 +90,8 @@ module tb_hps_disk_port;
         .img_mounted       (img_mounted),
         .img_present       (img_present),
         .img_readonly      (img_readonly),
-        .gcr_mode          (gcr_mode)
+        .gcr_mode          (gcr_mode),
+        .drive_on          (drive_on)
     );
 
     always #5      clk_av = ~clk_av;   // 100 MHz
@@ -366,12 +370,29 @@ module tb_hps_disk_port;
         expect_eq(img_present, 1, "8. Diskette bleibt eingelegt");
         expect_eq(n_mount, 1, "8. kein weiterer Impuls auf img_mounted");
 
-        // Herausnehmen: zweiter Impuls, Pegel 0
-        want_present = 1'b0;
-        av_write(MOUNT, 32'd0, 4'b1111);
+        // 9. Laufwerk ein und aus, unabhängig von der Diskette
+        expect_eq(drive_on, 0, "9. Laufwerk bisher aus");
+        av_write(MOUNT, 32'h0000_000B, 4'b1111);    // ein, Diskette, Schreibschutz
         repeat (50) @(negedge clk);
-        expect_eq(img_present, 0, "Diskette herausgenommen");
-        expect_eq(n_mount, 2, "Impuls auch beim Herausnehmen");
+        expect_eq({drive_on, gcr_mode, img_readonly, img_present}, 4'b1011, "9. eingeschaltet mit Diskette");
+        expect_eq(n_mount, 2, "9. Impuls beim Einschalten");
+        want_present = 1'b0;
+        av_write(MOUNT, 32'h0000_0008, 4'b1111);    // Diskette heraus, Laufwerk bleibt an
+        repeat (50) @(negedge clk);
+        expect_eq(img_present, 0, "9. Diskette herausgenommen");
+        expect_eq(drive_on, 1, "9. Laufwerk bleibt an");
+        expect_eq(n_mount, 3, "9. Impuls auch beim Herausnehmen");
+        av_read(MOUNT, rd);
+        expect_eq(rd, 8, "9. MOUNT zuruecklesen");
+        want_present = 1'b1;
+        av_write(MOUNT, 32'h0000_0009, 4'b1111);    // andere Diskette hinein
+        repeat (50) @(negedge clk);
+        expect_eq({drive_on, img_present}, 2'b11, "9. neue Diskette, Laufwerk weiter an");
+        expect_eq(n_mount, 4, "9. Impuls beim Einlegen");
+        want_present = 1'b0;
+        av_write(MOUNT, 32'd0, 4'b1111);            // alles aus
+        repeat (50) @(negedge clk);
+        expect_eq({drive_on, img_present}, 2'b00, "9. Laufwerk aus");
 
         if (errors == 0) $display("PASS: tb_hps_disk_port");
         else             $display("FAIL: tb_hps_disk_port (%0d Fehler)", errors);

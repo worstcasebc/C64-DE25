@@ -39,8 +39,8 @@
 //                  STATUS   lesen, Bit 0 = 1: beschäftigt.
 //           2      MOUNT    lesen und schreiben: Bit 0 = Diskette vorhanden,
 //                           Bit 1 = Schreibschutz, Bit 2 = Format (0 = .D64,
-//                           1 = .G64). Jedes Schreiben gilt als
-//                           Diskettenwechsel.
+//                           1 = .G64), Bit 3 = Laufwerk eingeschaltet. Jedes
+//                           Schreiben gilt als Diskettenwechsel.
 //           2048.. PUFFER   8192 Bytes, vier pro Wort, das unterste zuerst.
 //                           Schreiben füllt den Puffer für eine Lieferung
 //                           (Byte 0 ist ihr erstes); Lesen liefert die Spur,
@@ -49,8 +49,13 @@
 //           avs_readdatavalid kommt einen Takt nach avs_read;
 //           avs_waitrequest ist immer 0.
 //         Seite Laufwerk: Anschlüsse wie in drive_1541 beschrieben.
-//           img_present = 1: Diskette eingelegt (auch für img_size und den
-//           Reset des Laufwerks gedacht).
+//           img_present = 1: Diskette eingelegt (auch für img_size gedacht).
+//           drive_on = 1: Laufwerk eingeschaltet; bei 0 gehört es in den
+//           Reset. Das ist nicht dasselbe wie "Diskette eingelegt": Ein
+//           Laufwerk bleibt an, wenn man die Diskette wechselt — ein
+//           Neustart löschte das Programm, das viele Spiele in das Laufwerk
+//           laden (Schnelllader). Eingeschaltet sein darf es aber nur,
+//           solange ein Lieferant seine Anforderungen bedient.
 //           img_mounted gibt bei jedem Diskettenwechsel einen Impuls.
 
 `default_nettype none
@@ -81,7 +86,8 @@ module hps_disk_port (
     output reg         img_mounted,
     output reg         img_present,
     output reg         img_readonly,
-    output reg         gcr_mode
+    output reg         gcr_mode,
+    output reg         drive_on
 );
 
     localparam [10:0] A_REQUEST = 11'd0,
@@ -102,7 +108,7 @@ module hps_disk_port (
     reg [5:0]  wr_cnt_q;
 
     // --- Seite HPS (clk_av) -------------------------------------------------
-    reg [2:0] mount_av_q;       // Format, Schreibschutz, vorhanden
+    reg [3:0] mount_av_q;       // eingeschaltet, Format, Schreibschutz, vorhanden
 
     wire ack_sync_q;
     wire rd_sync_q;
@@ -125,7 +131,7 @@ module hps_disk_port (
         if (rst_av) begin
             done_tgl_q        <= 1'b0;
             mount_tgl_q       <= 1'b0;
-            mount_av_q        <= 3'b000;
+            mount_av_q        <= 4'b0000;
             avs_readdatavalid <= 1'b0;
         end else begin
             if (avs_write && !sel_buffer && avs_byteenable[0]) begin
@@ -133,7 +139,7 @@ module hps_disk_port (
                     done_tgl_q <= ~done_tgl_q;
                 end
                 if (avs_address[10:0] == A_MOUNT) begin
-                    mount_av_q  <= avs_writedata[2:0];
+                    mount_av_q  <= avs_writedata[3:0];
                     mount_tgl_q <= ~mount_tgl_q;
                 end
             end
@@ -147,7 +153,7 @@ module hps_disk_port (
                                          ? {wr_lba_q, 2'b00, wr_cnt_q, 6'b000000, ~busy, 1'b0}
                                          : {sd_lba[15:0], 2'b00, sd_blk_cnt, 6'b000000, 1'b0, rd_sync_q & ~busy};
                 A_CONTROL: reg_data_q <= {31'b0, busy};
-                A_MOUNT:   reg_data_q <= {29'b0, mount_av_q};
+                A_MOUNT:   reg_data_q <= {28'b0, mount_av_q};
                 default:   reg_data_q <= 32'd0;
             endcase
         end
@@ -193,9 +199,9 @@ module hps_disk_port (
     // --- Seite Laufwerk (clk) -----------------------------------------------
     wire       done_sync_q;
     wire       mount_sync_q;
-    wire [2:0] mount_lvl_q;
+    wire [3:0] mount_lvl_q;
 
-    sync_2ff #(.WIDTH(5)) u_sync_to_drive (
+    sync_2ff #(.WIDTH(6)) u_sync_to_drive (
         .clk      (clk),
         .d_async  ({mount_av_q, mount_tgl_q, done_tgl_q}),
         .d_sync_q ({mount_lvl_q, mount_sync_q, done_sync_q})
@@ -212,7 +218,7 @@ module hps_disk_port (
             mount_seen_q <= mount_sync_q;
             mount_cnt_q  <= 5'd0;
             img_mounted  <= 1'b0;
-            {gcr_mode, img_readonly, img_present} <= mount_lvl_q;
+            {drive_on, gcr_mode, img_readonly, img_present} <= mount_lvl_q;
         end else if (mount_cnt_q == 5'd0) begin
             img_mounted <= 1'b0;
             if (mount_sync_q != mount_seen_q) begin
@@ -221,7 +227,7 @@ module hps_disk_port (
             end
         end else begin
             mount_cnt_q <= mount_cnt_q + 1'b1;      // läuft bis 31 und zurück auf 0
-            if (mount_cnt_q == 5'd3) {gcr_mode, img_readonly, img_present} <= mount_lvl_q;
+            if (mount_cnt_q == 5'd3) {drive_on, gcr_mode, img_readonly, img_present} <= mount_lvl_q;
             if (mount_cnt_q == 5'd8) img_mounted <= 1'b1;
         end
     end

@@ -126,9 +126,9 @@ ten minutes and only runs when it is named.
 |---------|----------|
 | `KEY0` | reset |
 | `SW0` | up: colour-bar test picture instead of the C64 picture |
-| `LEDR0` | 1 Hz heartbeat — blinks only while the PLL is running |
-| `LEDR1`–`LEDR3` | HPS build only: switched from Linux |
-| `LEDR4` | light of the 1541 disk drive |
+| `LEDR0` | state. HPS build: blinks fast while the service on Linux is not running (Linux is still booting), lit when it runs, blinks slowly when it reports a problem (no keyboard found, saving failed). Without HPS: 1 Hz heartbeat |
+| `LEDR1` | light of the 1541 disk drive |
+| `LEDR2` | HPS build only: the disk has changes that are not in the file yet — do not power off |
 
 Picture and sound come out of the HDMI connector.
 
@@ -219,11 +219,6 @@ Keys are mapped by position, not by what is printed on them: the key right of
 `L` is the colon, as on a C64. Esc is RUN/STOP, Tab is CTRL, left Ctrl is the
 Commodore key; Page Up is RESTORE; the full table is at the top of the script.
 
-A second register, 3 bits at `0x2001_0080`, switches `LEDR1`–`LEDR3`:
-
-```
-sudo python3 -c "import mmap,os,struct; f=os.open('/dev/mem',os.O_RDWR|os.O_SYNC); m=mmap.mmap(f,4096,offset=0x20010000); m[0x80:0x84]=struct.pack('<I',7)"
-```
 
 The register map is in [quartus_hps/README.md](quartus_hps/README.md).
 

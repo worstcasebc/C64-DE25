@@ -16,6 +16,12 @@ Der Dienst macht drei Dinge zugleich:
      (rtl/video/video_osd.v) — der C64 läuft darunter ungestört weiter, auch
      ein Spiel, das nach der nächsten Diskette fragt.
 
+Die LEDs des Boards: LED 0 blinkt schnell, solange dieser Dienst nicht läuft
+(Linux bootet noch), leuchtet, wenn er läuft, und blinkt langsam, wenn etwas
+nicht stimmt (keine Tastatur gefunden, Speichern fehlgeschlagen). LED 1 ist
+die Leuchte des Laufwerks. LED 2 leuchtet, solange die Diskette Änderungen
+hat, die noch nicht in der Datei stehen — dann nicht ausschalten.
+
 Der Ziffernblock ist ein Joystick: 8/2/4/6 sind die Richtungen, 7/9/1/3 die
 Diagonalen, 0 und Strg rechts sind Feuer. An welchem Port des C64 er steckt
 (die meisten Spiele erwarten Port 2), stellt man im Menü um.
@@ -65,6 +71,10 @@ BYTE_DATA = 0x100 // 4          # Register von hps_byte_port in der Seite 0x2001
 OSD_VISIBLE = 0x1000 // 4       # Register von video_osd im Bereich 0x2001_4000
 OSD_TEXT = 0x1800 // 4
 STATUS_RESET = 4                # Bit 2 von STATUS in hps_byte_port: Reset des C64
+LEDS = 0x00C // 4               # Lebenszeichen an hps_status_led (Bereich 0x2001_4000)
+LED_PROBLEM = 1                 # Bit 0: Zustands-LED blinkt langsam
+LED_UNSAVED = 2                 # Bit 1: LED "Diskette hat ungespeicherte Änderungen"
+LED_INTERVAL = 0.5              # so oft meldet sich der Dienst; das FPGA wartet 3 s
 COLS, ROWS = 32, 16
 LIST_ROWS = 10                  # Zeilen für Dateien im Fenster
 LIST_TOP = 3
@@ -135,6 +145,10 @@ class Drive:
     im Speicher und eine Sekunde nach dem letzten Schreiben in der Datei.
     Vor der ersten Änderung an einer Datei entsteht daneben einmalig eine
     Sicherung <name>.bak. Eine .G64 wird mit Schreibschutz eingelegt.
+
+    Das Laufwerk ist eingeschaltet, solange dieser Dienst läuft — mit oder
+    ohne Diskette. Beim Wechsel bleibt es an; ein Neustart löschte das
+    Programm, das viele Spiele in das Laufwerk laden (Schnelllader).
     """
 
     FLUSH_AFTER = 1.0       # Sekunden Ruhe, bevor die Datei geschrieben wird
@@ -149,7 +163,8 @@ class Drive:
         self.name = ""
         self.writable = False
         self.dirty_since = 0.0      # 0 = nichts zu schreiben
-        self.reg[disk.MOUNT] = 0
+        self.save_failed = False
+        self.reg[disk.MOUNT] = disk.MOUNT_DRIVE_ON      # einschalten, noch ohne Diskette
 
     def insert(self, path: Path) -> str:
         """Legt ein Abbild ein. Liefert eine Fehlermeldung oder ''."""
@@ -161,25 +176,33 @@ class Drive:
         if not is_g64 and len(image) not in disk.D64_SIZES:
             return "KEIN D64/G64 (GROESSE)"
         self.flush()
+        self.save_failed = False
         self.image, self.original = bytearray(image), image
         self.path, self.name = path, path.name
         self.supply = disk.blocks_g64 if is_g64 else disk.blocks_d64
         self.writable = not is_g64
         # Jedes Schreiben von MOUNT gilt dem Laufwerk als Diskettenwechsel.
-        self.reg[disk.MOUNT] = (disk.MOUNT_PRESENT
+        self.reg[disk.MOUNT] = (disk.MOUNT_DRIVE_ON | disk.MOUNT_PRESENT
                                 | (0 if self.writable else disk.MOUNT_READONLY)
                                 | (disk.MOUNT_G64 if is_g64 else 0))
         return ""
 
     def eject(self) -> None:
+        """Nimmt die Diskette heraus; das Laufwerk bleibt an."""
         self.flush()
         self.image, self.original, self.name, self.path = bytearray(), b"", "", None
+        self.writable = False
+        self.reg[disk.MOUNT] = disk.MOUNT_DRIVE_ON
+
+    def power_off(self) -> None:
+        """Schaltet das Laufwerk aus: Ohne Lieferanten darf es nicht laufen."""
+        self.flush()
         self.reg[disk.MOUNT] = 0
 
     def serve(self) -> bool:
         """Bedient höchstens eine Anforderung des Laufwerks; True, wenn es eine gab."""
-        if not self.image:
-            return False                    # keine Diskette: das Laufwerk ruht im Reset
+        # Auch ohne Diskette wird geliefert (lauter Nullen): Das Laufwerk
+        # fragt nach dem Einschalten eine Spur an und wartet sonst ewig.
         request = self.reg[disk.REQUEST]
         if not request & 3:
             return False
@@ -227,8 +250,10 @@ class Drive:
                 handle.write(self.image)
                 handle.flush()
                 os.fsync(handle.fileno())
+            self.save_failed = False
             print(f"{self.name} gespeichert.", flush=True)
         except OSError as err:
+            self.save_failed = True
             print(f"{self.name} lässt sich nicht speichern: {err}", flush=True)
         finally:
             if remount:
@@ -446,6 +471,8 @@ def main() -> int:
 
         drive = Drive(reg_b, verbose="-v" in sys.argv[1:])
         busy_until = 0.0        # solange wird das Laufwerk ohne Pause abgefragt
+        next_led = 0.0
+        started = time.monotonic()
         next_report = 0.0
         menu = Menu(Osd(reg_b), drive, load_prg, reset_c64)
         kbd = None
@@ -525,6 +552,16 @@ def main() -> int:
                     busy_until = time.monotonic() + 0.5
                 drive.flush(only_if_idle=True)
 
+                # Lebenszeichen für die Zustands-LED. Ein Problem ist: keine
+                # Tastatur (in den ersten Sekunden noch kein Grund zur Sorge)
+                # oder ein gescheitertes Speichern.
+                now = time.monotonic()
+                if now >= next_led:
+                    next_led = now + LED_INTERVAL
+                    problem = drive.save_failed or (kbd is None and now - started > 5.0)
+                    reg_b[LEDS] = ((LED_PROBLEM if problem else 0)
+                                   | (LED_UNSAVED if drive.dirty_since else 0))
+
                 # Mit -v alle zwei Sekunden ein Lebenszeichen mit dem Stand
                 # der Register, zur Fehlersuche.
                 if drive.verbose and time.monotonic() >= next_report:
@@ -537,7 +574,7 @@ def main() -> int:
         finally:
             release_all()
             menu.osd.hide()
-            drive.eject()
+            drive.power_off()
             reg_a.release()
             reg_b.release()
             if kbd is not None:
