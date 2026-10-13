@@ -10,35 +10,42 @@
 //              Seite, ram_2clk) und meldet in CONTROL "geliefert".
 //           3. Das Modul trägt den Pufferinhalt Byte für Byte ins Laufwerk
 //              (sd_ack, sd_buff_*). Solange meldet STATUS "beschäftigt".
+//         Schreiben geht denselben Weg zurück: Hat der C64 eine Spur
+//         verändert, meldet das Laufwerk sd_wr. Das Modul holt die Spur von
+//         sich aus ab und stellt sie in einen zweiten Puffer — das benutzte
+//         Geschirr auf der Durchreiche. Linux sieht in REQUEST "Spur zum
+//         Abholen bereit", liest den Puffer und meldet in CONTROL
+//         "abgeholt". Bis dahin bedient das Modul nichts anderes, damit der
+//         Puffer nicht überschrieben wird.
 //         Linux legt außerdem die Diskette ein und nimmt sie heraus
 //         (Register MOUNT).
-//         Noch nicht umgesetzt: Schreiben auf die Diskette. Schreibwünsche
-//         des Laufwerks (sd_wr) werden angenommen und verworfen; Linux
-//         sollte die Diskette deshalb mit Schreibschutz einlegen.
 // Takte:  Zwei Domänen.
 //           clk_av  Takt der Brücke (100 MHz), Reset rst_av
 //           clk     Takt von C64 und Laufwerk (31,5 MHz), Reset rst
 //         Beide Resets synchron und aktiv high; rst_av nur zusammen mit rst.
-//         Über die Grenze gehen: die Daten durch das RAM; "geliefert" und
+//         Über die Grenze gehen: die Daten durch die RAMs; "geliefert" und
 //         "Diskette gewechselt" als Fähnchen wie in hps_byte_port; einzelne
 //         Pegel durch sync_2ff. Block und Anzahl der Anforderung liest die
 //         HPS-Seite ohne Synchronizer: Sie stehen still, sobald die
 //         Anforderung (zwei Takte später) sichtbar ist.
 // Ports:  Seite HPS, Avalon-MM-Slave (avs_*), avs_address zählt Worte:
 //           0      REQUEST  lesen: Bit 0 = Laufwerk will lesen,
-//                           Bit 1 = Laufwerk will schreiben,
-//                           Bit 13..8 = Anzahl Blöcke - 1,
-//                           Bit 31..16 = erster Block. Während einer
-//                           Lieferung lesen Bit 0 und 1 als 0.
-//           1      CONTROL  schreiben, Bit 0 = 1: geliefert.
+//                           Bit 1 = eine geschriebene Spur liegt zum Abholen
+//                           im Puffer, Bit 13..8 = Anzahl Blöcke - 1,
+//                           Bit 31..16 = erster Block. Nach "geliefert" oder
+//                           "abgeholt" lesen Bit 0 und 1 als 0, bis das
+//                           Modul fertig ist.
+//           1      CONTROL  schreiben, Bit 0 = 1: geliefert bzw. abgeholt.
 //                  STATUS   lesen, Bit 0 = 1: beschäftigt.
 //           2      MOUNT    lesen und schreiben: Bit 0 = Diskette vorhanden,
 //                           Bit 1 = Schreibschutz, Bit 2 = Format (0 = .D64,
 //                           1 = .G64). Jedes Schreiben gilt als
 //                           Diskettenwechsel.
-//           2048.. PUFFER   schreiben: 8192 Bytes, vier pro Wort, das
-//                           unterste zuerst. Byte 0 ist das erste der
-//                           Lieferung.
+//           2048.. PUFFER   8192 Bytes, vier pro Wort, das unterste zuerst.
+//                           Schreiben füllt den Puffer für eine Lieferung
+//                           (Byte 0 ist ihr erstes); Lesen liefert die Spur,
+//                           die zum Abholen bereitliegt. Es sind zwei
+//                           getrennte Speicher an derselben Adresse.
 //           avs_readdatavalid kommt einen Takt nach avs_read;
 //           avs_waitrequest ist immer 0.
 //         Seite Laufwerk: Anschlüsse wie in drive_1541 beschrieben.
@@ -56,7 +63,7 @@ module hps_disk_port (
     input  wire [31:0] avs_writedata,
     input  wire [3:0]  avs_byteenable,
     input  wire        avs_read,
-    output reg  [31:0] avs_readdata,
+    output wire [31:0] avs_readdata,
     output reg         avs_readdatavalid,
     output wire        avs_waitrequest,
 
@@ -69,6 +76,7 @@ module hps_disk_port (
     output reg         sd_ack,
     output reg  [13:0] sd_buff_addr,
     output reg  [7:0]  sd_buff_dout,
+    input  wire [7:0]  sd_buff_din,
     output reg         sd_buff_wr,
     output reg         img_mounted,
     output reg         img_present,
@@ -82,9 +90,16 @@ module hps_disk_port (
 
     wire sel_buffer = avs_address[11];
 
-    reg done_tgl_q;     // Fähnchen "geliefert" (clk_av)
-    reg ack_tgl_q;      // Fähnchen "eingetragen" (clk)
+    reg done_tgl_q;     // Fähnchen "geliefert/abgeholt" (clk_av)
+    reg ack_tgl_q;      // Fähnchen "erledigt" (clk)
     reg mount_tgl_q;    // Fähnchen "Diskette gewechselt" (clk_av)
+
+    // Geschriebene Spur, die zum Abholen bereitliegt (clk): Kennzeichen,
+    // erster Block und Anzahl. Die beiden letzten stehen still, solange das
+    // Kennzeichen gesetzt ist — auch wenn das Laufwerk schon weiterzieht.
+    reg        wr_ready_q;
+    reg [15:0] wr_lba_q;
+    reg [5:0]  wr_cnt_q;
 
     // --- Seite HPS (clk_av) -------------------------------------------------
     reg [2:0] mount_av_q;       // Format, Schreibschutz, vorhanden
@@ -95,13 +110,16 @@ module hps_disk_port (
 
     sync_2ff #(.WIDTH(3)) u_sync_to_av (
         .clk      (clk_av),
-        .d_async  ({ack_tgl_q, sd_wr, sd_rd}),
+        .d_async  ({ack_tgl_q, wr_ready_q, sd_rd}),
         .d_sync_q ({ack_sync_q, wr_sync_q, rd_sync_q})
     );
 
     wire busy = (done_tgl_q != ack_sync_q);
 
     assign avs_waitrequest = 1'b0;
+
+    reg [31:0] reg_data_q;      // gelesenes Register
+    reg        buf_read_q;      // der letzte Lesezugriff galt dem Puffer
 
     always @(posedge clk_av) begin
         if (rst_av) begin
@@ -121,38 +139,56 @@ module hps_disk_port (
             end
 
             avs_readdatavalid <= avs_read;
-            if (sel_buffer) begin
-                avs_readdata <= 32'd0;
-            end else begin
-                case (avs_address[10:0])
-                    A_REQUEST: avs_readdata <= {sd_lba[15:0], 2'b00, sd_blk_cnt, 6'b000000,
-                                                wr_sync_q & ~busy, rd_sync_q & ~busy};
-                    A_CONTROL: avs_readdata <= {31'b0, busy};
-                    A_MOUNT:   avs_readdata <= {29'b0, mount_av_q};
-                    default:   avs_readdata <= 32'd0;
-                endcase
-            end
+            buf_read_q        <= sel_buffer;
+            case (avs_address[10:0])
+                // Liegt eine geschriebene Spur bereit, gelten deren Block
+                // und Anzahl; eine Leseanforderung zeigt sich erst danach.
+                A_REQUEST: reg_data_q <= wr_sync_q
+                                         ? {wr_lba_q, 2'b00, wr_cnt_q, 6'b000000, ~busy, 1'b0}
+                                         : {sd_lba[15:0], 2'b00, sd_blk_cnt, 6'b000000, 1'b0, rd_sync_q & ~busy};
+                A_CONTROL: reg_data_q <= {31'b0, busy};
+                A_MOUNT:   reg_data_q <= {29'b0, mount_av_q};
+                default:   reg_data_q <= 32'd0;
+            endcase
         end
     end
 
-    // --- Puffer: vier Byte-Spuren, eine je Byte des Datenworts --------------
-    reg  [12:0] idx_q;          // Nummer des Bytes, das gerade eingetragen wird
-    wire [7:0]  lane [0:3];
+    // --- Puffer: je vier Byte-Spuren, eine je Byte des Datenworts -----------
+    // "in": von Linux zum Laufwerk (Lieferung), "out": vom Laufwerk zu Linux
+    // (geschriebene Spur).
+    reg  [12:0] idx_q;          // Nummer des Bytes, das gerade unterwegs ist
+    reg         out_we_q;       // Byte aus dem Laufwerk in den Puffer "out"
+    wire [7:0]  lane_in  [0:3];
+    wire [7:0]  lane_out [0:3];
 
     genvar g;
     generate
         for (g = 0; g < 4; g = g + 1) begin : g_lane
-            ram_2clk #(.ADDR_W(11), .DATA_W(8)) u_ram (
+            ram_2clk #(.ADDR_W(11), .DATA_W(8)) u_ram_in (
                 .wr_clk    (clk_av),
                 .wr_en     (avs_write && sel_buffer && avs_byteenable[g]),
                 .wr_addr   (avs_address[10:0]),
                 .wr_din    (avs_writedata[g*8 +: 8]),
                 .rd_clk    (clk),
                 .rd_addr   (idx_q[12:2]),
-                .rd_dout_q (lane[g])
+                .rd_dout_q (lane_in[g])
+            );
+
+            ram_2clk #(.ADDR_W(11), .DATA_W(8)) u_ram_out (
+                .wr_clk    (clk),
+                .wr_en     (out_we_q && idx_q[1:0] == g),
+                .wr_addr   (idx_q[12:2]),
+                .wr_din    (sd_buff_din),
+                .rd_clk    (clk_av),
+                .rd_addr   (avs_address[10:0]),
+                .rd_dout_q (lane_out[g])
             );
         end
     endgenerate
+
+    // Der Puffer antwortet wie die Register einen Takt nach der Adresse.
+    assign avs_readdata = buf_read_q ? {lane_out[3], lane_out[2], lane_out[1], lane_out[0]}
+                                     : reg_data_q;
 
     // --- Seite Laufwerk (clk) -----------------------------------------------
     wire       done_sync_q;
@@ -190,18 +226,28 @@ module hps_disk_port (
         end
     end
 
-    // Lieferung eintragen. Pro Byte drei Takte: Adresse ans RAM, Byte samt
-    // Schreibimpuls ans Laufwerk, Byte noch einen Takt halten (das Laufwerk
-    // übernimmt die Daten einen Takt nach dem Impuls).
-    localparam [2:0] S_IDLE = 3'd0,
-                     S_ADDR = 3'd1,
-                     S_LOAD = 3'd2,
-                     S_HOLD = 3'd3,
-                     S_END  = 3'd4;
+    // Ablauf. Lieferung ins Laufwerk, pro Byte drei Takte: Adresse ans RAM,
+    // Byte samt Schreibimpuls ans Laufwerk, Byte noch einen Takt halten (das
+    // Laufwerk übernimmt die Daten einen Takt nach dem Impuls).
+    // Abholen aus dem Laufwerk, pro Byte vier Takte: Adresse anlegen, zwei
+    // Takte warten (so lange braucht der Speicher des Laufwerks), Byte in
+    // den Puffer "out".
+    localparam [3:0] S_IDLE  = 4'd0,
+                     S_ADDR  = 4'd1,
+                     S_LOAD  = 4'd2,
+                     S_HOLD  = 4'd3,
+                     S_END   = 4'd4,
+                     S_WADDR = 4'd5,
+                     S_WAIT1 = 4'd6,
+                     S_WAIT2 = 4'd7,
+                     S_WCAP  = 4'd8,
+                     S_WEND  = 4'd9;
 
-    reg [2:0]  state_q;
-    reg [13:0] total_q;         // Bytes der Lieferung
+    reg [3:0]  state_q;
+    reg [13:0] total_q;         // Bytes der Lieferung bzw. der Spur
     reg [2:0]  end_cnt_q;
+
+    wire last_byte = ({1'b0, idx_q} + 14'd1 == total_q);
 
     always @(posedge clk) begin
         if (rst) begin
@@ -210,39 +256,55 @@ module hps_disk_port (
             ack_tgl_q  <= done_sync_q;
             sd_ack     <= 1'b0;
             sd_buff_wr <= 1'b0;
+            out_we_q   <= 1'b0;
+            wr_ready_q <= 1'b0;
         end else begin
             sd_buff_wr <= 1'b0;
+            out_we_q   <= 1'b0;
 
             case (state_q)
                 S_IDLE: begin
+                    idx_q     <= 13'd0;
+                    total_q   <= {8'd0, sd_blk_cnt} * 14'd256 + 14'd256;
+                    end_cnt_q <= 3'd0;
                     if (done_sync_q != ack_tgl_q) begin
-                        idx_q     <= 13'd0;
-                        total_q   <= {8'd0, sd_blk_cnt} * 14'd256 + 14'd256;
-                        end_cnt_q <= 3'd0;
-                        if (sd_rd) begin
+                        // Linux meldet "geliefert" oder "abgeholt"
+                        if (wr_ready_q) begin
+                            // erst das Kennzeichen löschen, das Fähnchen
+                            // folgt in S_END einige Takte später — so sieht
+                            // Linux nie "bereit" und "nicht beschäftigt"
+                            // zugleich, wenn es schon abgeholt hat
+                            wr_ready_q <= 1'b0;
+                            state_q    <= S_END;
+                        end else if (sd_rd) begin
                             sd_ack  <= 1'b1;
                             state_q <= S_ADDR;
-                        end else if (sd_wr) begin
-                            sd_ack  <= 1'b1;        // annehmen und verwerfen
-                            state_q <= S_END;
                         end else begin
                             ack_tgl_q <= ~ack_tgl_q;    // nichts bestellt
                         end
+                    end else if (sd_wr && !wr_ready_q) begin
+                        // Das Laufwerk will eine Spur loswerden: abholen
+                        wr_lba_q     <= sd_lba[15:0];
+                        wr_cnt_q     <= sd_blk_cnt;
+                        sd_ack       <= 1'b1;
+                        sd_buff_addr <= 14'd0;
+                        state_q      <= S_WAIT1;
                     end
                 end
 
+                // --- Lieferung ins Laufwerk ---
                 S_ADDR: state_q <= S_LOAD;
 
                 S_LOAD: begin
                     sd_buff_addr <= {1'b0, idx_q};
-                    sd_buff_dout <= lane[idx_q[1:0]];
+                    sd_buff_dout <= lane_in[idx_q[1:0]];
                     sd_buff_wr   <= 1'b1;
                     state_q      <= S_HOLD;
                 end
 
                 S_HOLD: begin
                     idx_q   <= idx_q + 1'b1;
-                    state_q <= ({1'b0, idx_q} + 14'd1 == total_q) ? S_END : S_ADDR;
+                    state_q <= last_byte ? S_END : S_ADDR;
                 end
 
                 S_END: begin
@@ -251,6 +313,37 @@ module hps_disk_port (
                     if (end_cnt_q == 3'd7) begin
                         ack_tgl_q <= ~ack_tgl_q;
                         state_q   <= S_IDLE;
+                    end
+                end
+
+                // --- Abholen aus dem Laufwerk ---
+                S_WADDR: begin
+                    sd_buff_addr <= {1'b0, idx_q};
+                    state_q      <= S_WAIT1;
+                end
+
+                S_WAIT1: state_q <= S_WAIT2;
+
+                S_WAIT2: begin
+                    out_we_q <= 1'b1;       // im nächsten Takt liegt das Byte an
+                    state_q  <= S_WCAP;
+                end
+
+                S_WCAP: begin
+                    if (last_byte) begin
+                        state_q <= S_WEND;
+                    end else begin
+                        idx_q   <= idx_q + 1'b1;
+                        state_q <= S_WADDR;
+                    end
+                end
+
+                S_WEND: begin
+                    end_cnt_q <= end_cnt_q + 1'b1;
+                    if (end_cnt_q == 3'd3) begin
+                        sd_ack     <= 1'b0;
+                        wr_ready_q <= 1'b1;
+                        state_q    <= S_IDLE;
                     end
                 end
 

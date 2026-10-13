@@ -385,7 +385,7 @@ works when a game asks for the next disk.
    |-----|-------------|
    | F12 | open and close the menu |
    | arrow up/down, Page Up/Down | choose an entry |
-   | Enter | insert the `.d64`/`.g64`, or load the `.prg` (a BASIC program is started with RUN); on the entry `<JOYSTICK: PORT n>` switch the joystick to the other port |
+   | Enter | insert the `.d64`/`.g64`, or load the `.prg` (a BASIC program is started with RUN); on the entry `<JOYSTICK: PORT n>` switch the joystick to the other port; on `<C64 ZURUECKSETZEN>` reset the C64 |
    | Esc | close the menu |
 
    Outside the menu the numeric keypad is a joystick:
@@ -417,6 +417,12 @@ the state of the registers — the first thing to look at when loading fails.
 
 After inserting a disk, give the drive about three seconds before the first
 `LOAD`.
+
+A `.d64` inserted through the menu can be written to (`SAVE`, saved games):
+what the C64 writes is in the file one second later. Before the first change
+to a file the service puts a copy `<name>.bak` next to it, once. The USB
+stick is mounted read-only and made writable only for the moment of writing.
+`.g64` images are write-protected.
 
 ## After changes
 

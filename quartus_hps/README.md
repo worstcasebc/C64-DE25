@@ -90,15 +90,15 @@ Basis aus Sicht von Linux: `0x2000_0000` (auf dem Board bestätigt).
 | `0x2001_0070` | `dipsw_pio`  | nicht angeschlossen (liest `0`)   |
 | `0x2001_0080` | `led_pio`    | 3 Bit, `LEDR[3:1]`, 1 = an        |
 | `0x2001_0100` | `DATA`       | `hps_byte_port`: Schreiben schickt Bit 7..0 als Byte an den C64; wird ignoriert, solange belegt |
-| `0x2001_0104` | `STATUS`     | `hps_byte_port`: Bit 0 = 1, solange das letzte Byte unterwegs ist (nur lesen); Bit 1 = 1: Taste RESTORE gedrückt; Bit 12..8 = Joystick an Port 1, Bit 20..16 = Joystick an Port 2, je hoch, runter, links, rechts, Feuer (alle lesen und schreiben, jedes Byte einzeln schreibbar) |
+| `0x2001_0104` | `STATUS`     | `hps_byte_port`: Bit 0 = 1, solange das letzte Byte unterwegs ist (nur lesen); Bit 1 = 1: Taste RESTORE gedrückt; Bit 2 = 1: Reset des C64, solange gesetzt; Bit 12..8 = Joystick an Port 1, Bit 20..16 = Joystick an Port 2, je hoch, runter, links, rechts, Feuer (alle lesen und schreiben, jedes Byte einzeln schreibbar) |
 | `0x2001_0108` | `KEYS_LO`    | `hps_byte_port`: Tasten 31..0 im Gitter des C64, 1 = gedrückt (Nummern wie in `rtl/io/key_matrix.v`) |
 | `0x2001_010C` | `KEYS_HI`    | `hps_byte_port`: Tasten 63..32 |
-| `0x2001_4000` | `REQUEST`    | `hps_disk_port`: Anforderung des Laufwerks — Bit 0 lesen, Bit 1 schreiben, Bit 13..8 Anzahl Blöcke − 1, Bit 31..16 erster Block |
-| `0x2001_4004` | `CONTROL`    | `hps_disk_port`: schreiben 1 = geliefert; lesen Bit 0 = beschäftigt |
+| `0x2001_4000` | `REQUEST`    | `hps_disk_port`: Bit 0 = Laufwerk will lesen, Bit 1 = eine geschriebene Spur liegt zum Abholen im Puffer, Bit 13..8 Anzahl Blöcke − 1, Bit 31..16 erster Block |
+| `0x2001_4004` | `CONTROL`    | `hps_disk_port`: schreiben 1 = geliefert bzw. abgeholt; lesen Bit 0 = beschäftigt |
 | `0x2001_4008` | `MOUNT`      | `hps_disk_port`: Bit 0 Diskette vorhanden, Bit 1 Schreibschutz, Bit 2 Format (0 = `.D64`, 1 = `.G64`) |
 | `0x2001_5000` | OSD sichtbar | `video_osd`: Bit 0 = 1 zeigt das Menüfenster, nur schreiben |
 | `0x2001_5800` | OSD Text     | `video_osd`: 512 Worte, je ein Zeichen (Bit 7..0, Bildschirmcode des C64, ab 128 invers), 32 Spalten × 16 Zeilen, nur schreiben |
-| `0x2001_6000` | Puffer       | `hps_disk_port`: 8192 Bytes für die gelieferten Blöcke, nur schreiben |
+| `0x2001_6000` | Puffer       | `hps_disk_port`: 8192 Bytes; schreiben füllt die Lieferung ans Laufwerk, lesen liefert die geschriebene Spur (zwei getrennte Speicher) |
 
 `sw/py/c64_disk.py <Abbild>` legt eine `.D64` oder `.G64` in das Laufwerk
 1541 ein und bedient dessen Anforderungen. Auf dem Board bestätigt mit einer
@@ -114,6 +114,13 @@ Einlegen einer `.D64` vom Stick, Laden eines Spiels über mehrere Spuren,
 Laden eines `.PRG`. Er ersetzt die beiden einzelnen Skripte unten, die weiter
 für sich benutzbar bleiben — aber nie gleichzeitig mit dem Dienst; die
 Skripte prüfen das selbst und brechen sonst ab.
+
+Im Dienst ist eine `.D64` beschreibbar: Was der C64 schreibt, steht eine
+Sekunde später in der Datei; vor der ersten Änderung entsteht einmalig eine
+Sicherung `<name>.bak`. Das Menü hat außerdem einen Eintrag, der den C64
+zurücksetzt. Auf dem Board bestätigt: `SAVE` eines BASIC-Programms, Laden
+desselben Programms nach einem Reset, die Sicherung auf dem Stick und der
+Reset aus dem Menü.
 
 Der Ziffernblock der Tastatur ist im Dienst ein Joystick (8/2/4/6, Ecken
 diagonal, 0 und Strg rechts Feuer); der Port wird im Menü gewählt. Auf dem

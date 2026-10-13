@@ -42,8 +42,9 @@ Not there yet:
   only. Otherwise keystrokes come from a PC over
   the UART (see [Controlling the C64](#controlling-the-c64)).
 - Disks: a 1541 disk drive reads `.D64` images that Linux on the HPS supplies
-  (HPS build only), chosen from a menu on the screen. Not yet: writing to the
-  disk and `.G64` images (prepared but untried). No tape or cartridges.
+  (HPS build only), chosen from a menu on the screen, and writes to them.
+  `.G64` images are prepared but untried and stay write-protected. No tape
+  or cartridges.
 - Joysticks: the numeric keypad of the USB keyboard acts as one (HPS build
   only); a real USB joystick is not supported yet.
 - PAL only.

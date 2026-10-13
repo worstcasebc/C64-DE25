@@ -23,9 +23,15 @@ Diagonalen, 0 und Strg rechts sind Feuer. An welchem Port des C64 er steckt
 Im Menü:
     Pfeil auf/ab, Bild auf/ab   Eintrag wählen
     Enter                       .D64/.G64 einlegen, .PRG laden, Joystick-Port
-                                wechseln
+                                wechseln, C64 zurücksetzen
     Esc oder F12                Menü schließen
 Solange das Menü offen ist, gehen die Tasten nicht an den C64.
+
+Eine .D64 ist beschreibbar (SAVE, Spielstände): Was der C64 schreibt, steht
+eine Sekunde später in der Datei. Vor der ersten Änderung legt der Dienst
+einmalig eine Sicherung <name>.bak daneben. Der USB-Stick ist dabei nur für
+den Augenblick des Schreibens beschreibbar eingehängt. Eine .G64 bleibt
+schreibgeschützt.
 
 Die Dateien sucht der Dienst auf einem USB-Stick (FAT32, nicht exFAT), der zum Beispiel
 über einen Hub neben der Tastatur steckt; ist keiner da, im Verzeichnis
@@ -58,6 +64,7 @@ from c64_blocks import BASIC_START, prg_to_blocks
 BYTE_DATA = 0x100 // 4          # Register von hps_byte_port in der Seite 0x2001_0000
 OSD_VISIBLE = 0x1000 // 4       # Register von video_osd im Bereich 0x2001_4000
 OSD_TEXT = 0x1800 // 4
+STATUS_RESET = 4                # Bit 2 von STATUS in hps_byte_port: Reset des C64
 COLS, ROWS = 32, 16
 LIST_ROWS = 10                  # Zeilen für Dateien im Fenster
 LIST_TOP = 3
@@ -122,15 +129,27 @@ class Osd:
 
 
 class Drive:
-    """Das Laufwerk: eingelegte Diskette und die Anforderungen des FPGA."""
+    """Das Laufwerk: eingelegte Diskette und die Anforderungen des FPGA.
+
+    Eine .D64 ist beschreibbar. Was der C64 schreibt, landet zuerst im Abbild
+    im Speicher und eine Sekunde nach dem letzten Schreiben in der Datei.
+    Vor der ersten Änderung an einer Datei entsteht daneben einmalig eine
+    Sicherung <name>.bak. Eine .G64 wird mit Schreibschutz eingelegt.
+    """
+
+    FLUSH_AFTER = 1.0       # Sekunden Ruhe, bevor die Datei geschrieben wird
 
     def __init__(self, reg, verbose: bool = False):
         self.reg = reg
         self.verbose = verbose
-        self.image = b""
+        self.image = bytearray()
+        self.original = b""         # Inhalt beim Einlegen, für die Sicherung
+        self.path: Path | None = None
         self.supply = disk.blocks_d64
         self.name = ""
-        self.eject()
+        self.writable = False
+        self.dirty_since = 0.0      # 0 = nichts zu schreiben
+        self.reg[disk.MOUNT] = 0
 
     def insert(self, path: Path) -> str:
         """Legt ein Abbild ein. Liefert eine Fehlermeldung oder ''."""
@@ -141,15 +160,20 @@ class Drive:
         is_g64 = image.startswith(disk.G64_MAGIC)
         if not is_g64 and len(image) not in disk.D64_SIZES:
             return "KEIN D64/G64 (GROESSE)"
-        self.image, self.name = image, path.name
+        self.flush()
+        self.image, self.original = bytearray(image), image
+        self.path, self.name = path, path.name
         self.supply = disk.blocks_g64 if is_g64 else disk.blocks_d64
+        self.writable = not is_g64
         # Jedes Schreiben von MOUNT gilt dem Laufwerk als Diskettenwechsel.
-        self.reg[disk.MOUNT] = (disk.MOUNT_PRESENT | disk.MOUNT_READONLY
+        self.reg[disk.MOUNT] = (disk.MOUNT_PRESENT
+                                | (0 if self.writable else disk.MOUNT_READONLY)
                                 | (disk.MOUNT_G64 if is_g64 else 0))
         return ""
 
     def eject(self) -> None:
-        self.image, self.name = b"", ""
+        self.flush()
+        self.image, self.original, self.name, self.path = bytearray(), b"", "", None
         self.reg[disk.MOUNT] = 0
 
     def serve(self) -> bool:
@@ -159,21 +183,71 @@ class Drive:
         request = self.reg[disk.REQUEST]
         if not request & 3:
             return False
+        lba = request >> 16
+        count = ((request >> 8) & 0x3F) + 1
         if request & 1:
-            lba = request >> 16
-            count = ((request >> 8) & 0x3F) + 1
             data = self.supply(self.image, lba, count)
             for i, word in enumerate(struct.unpack(f"<{len(data) // 4}I", data)):
                 self.reg[disk.BUFFER + i] = word
             if self.verbose:
                 print(f"geliefert: Block {lba}, {count} Blöcke", flush=True)
-        elif self.verbose:
-            print(f"Schreibwunsch verworfen: Block {request >> 16}", flush=True)
-        self.reg[disk.CONTROL] = 1          # geliefert (Schreibwünsche: verworfen)
+        else:
+            # Eine geschriebene Spur liegt im Puffer: abholen und eintragen.
+            words = [self.reg[disk.BUFFER + i] for i in range(count * disk.BLOCK // 4)]
+            data = struct.pack(f"<{len(words)}I", *words)
+            start = lba * disk.BLOCK
+            if self.writable and start + len(data) <= len(self.image):
+                if self.image[start:start + len(data)] != data:
+                    self.image[start:start + len(data)] = data
+                    self.dirty_since = time.monotonic()
+                if self.verbose:
+                    print(f"geschrieben: Block {lba}, {count} Blöcke", flush=True)
+            elif self.verbose:
+                print(f"Schreiben verworfen: Block {lba}, {count} Blöcke", flush=True)
+        self.reg[disk.CONTROL] = 1          # geliefert bzw. abgeholt
         while self.reg[disk.CONTROL] & 1:
             pass
         return True
 
+    def flush(self, only_if_idle: bool = False) -> None:
+        """Schreibt das geänderte Abbild in seine Datei."""
+        if not self.dirty_since or self.path is None:
+            return
+        if only_if_idle and time.monotonic() - self.dirty_since < self.FLUSH_AFTER:
+            return
+        self.dirty_since = 0.0
+        mount = mount_point(self.path)
+        remount = mount is not None and subprocess.run(
+            ["mount", "-o", "remount,rw", mount], capture_output=True).returncode == 0
+        try:
+            backup = self.path.with_name(self.path.name + ".bak")
+            if not backup.exists():
+                backup.write_bytes(self.original)
+            with open(self.path, "r+b") as handle:
+                handle.write(self.image)
+                handle.flush()
+                os.fsync(handle.fileno())
+            print(f"{self.name} gespeichert.", flush=True)
+        except OSError as err:
+            print(f"{self.name} lässt sich nicht speichern: {err}", flush=True)
+        finally:
+            if remount:
+                subprocess.run(["mount", "-o", "remount,ro", mount], capture_output=True)
+
+
+def mount_point(path: Path) -> str | None:
+    """Einhängepunkt eines USB-Sticks, auf dem path liegt (sonst None)."""
+    try:
+        mounts = [ln.split() for ln in open("/proc/mounts", encoding="utf-8", errors="replace")]
+    except OSError:
+        return None
+    resolved = str(path.resolve())
+    for fields in mounts:
+        if len(fields) > 1 and fields[0].startswith("/dev/sd"):
+            point = fields[1].replace("\\040", " ")
+            if resolved.startswith(point.rstrip("/") + "/"):
+                return point
+    return None
 
 def find_stick() -> str | None:
     """Verzeichnis eines USB-Sticks, nötigenfalls selbst eingehängt (nur lesen)."""
@@ -216,10 +290,10 @@ def list_files(folder: str) -> list[Path]:
 class Menu:
     """Zustand des Auswahlmenüs."""
 
-    def __init__(self, osd: Osd, drive: Drive, load_prg):
-        self.osd, self.drive, self.load_prg = osd, drive, load_prg
+    def __init__(self, osd: Osd, drive: Drive, load_prg, reset_c64):
+        self.osd, self.drive, self.load_prg, self.reset_c64 = osd, drive, load_prg, reset_c64
         self.open = False
-        # Einträge: (Text, Datei) oder (Text, "eject") oder (Text, "joy")
+        # Einträge: (Text, Datei) oder (Text, "eject" / "joy" / "reset")
         self.entries: list[tuple[str, Path | str]] = []
         self.joy_port = 2
         self.selected = 0
@@ -236,6 +310,7 @@ class Menu:
         if self.drive.name:
             self.entries.insert(0, ("<DISKETTE HERAUSNEHMEN>", "eject"))
         self.entries.append((f"<JOYSTICK: PORT {self.joy_port}>", "joy"))
+        self.entries.append(("<C64 ZURUECKSETZEN>", "reset"))
         self.selected = min(self.selected, len(self.entries) - 1)
         self.message = "" if files else "KEINE .D64 .G64 .PRG GEFUNDEN"
         self.open = True
@@ -286,6 +361,10 @@ class Menu:
             path = self.entries[self.selected][1]
             if path == "eject":
                 self.drive.eject()
+                self.close()
+                return
+            if path == "reset":
+                self.reset_c64()
                 self.close()
                 return
             if path == "joy":
@@ -351,6 +430,12 @@ def main() -> int:
             reg_a[keys.KEYS_HI] = 0
             reg_a[keys.STATUS] = 0          # RESTORE und beide Joysticks
 
+        def reset_c64() -> None:
+            """Hält den C64 kurz im Reset, wie der Taster am Board."""
+            reg_a[keys.STATUS] = STATUS_RESET
+            time.sleep(0.05)
+            write_status()
+
         def write_status() -> None:
             """RESTORE (Bit 1) und der Joystick am gewählten Port (ab Bit 8 bzw. 16)."""
             bits = 0
@@ -362,7 +447,7 @@ def main() -> int:
         drive = Drive(reg_b, verbose="-v" in sys.argv[1:])
         busy_until = 0.0        # solange wird das Laufwerk ohne Pause abgefragt
         next_report = 0.0
-        menu = Menu(Osd(reg_b), drive, load_prg)
+        menu = Menu(Osd(reg_b), drive, load_prg, reset_c64)
         kbd = None
         next_try = 0.0
         pressed: set[int] = set()
@@ -438,6 +523,7 @@ def main() -> int:
 
                 if drive.serve():
                     busy_until = time.monotonic() + 0.5
+                drive.flush(only_if_idle=True)
 
                 # Mit -v alle zwei Sekunden ein Lebenszeichen mit dem Stand
                 # der Register, zur Fehlersuche.

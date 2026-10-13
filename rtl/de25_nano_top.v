@@ -163,7 +163,10 @@ module de25_nano_top #(
         .d_sync_q ({pll_locked_q, ninit_done_q, key0_q, sw0_q})
     );
 
-    wire rst = key0_q | ninit_done_q | ~pll_locked_q;
+    // Reset des C64: Taster, Start des FPGA, PLL — und mit HPS der Wunsch von
+    // Linux (Menü). hps_reset_q ist schon in clk_sys synchronisiert.
+    wire hps_reset_q;
+    wire rst = key0_q | ninit_done_q | ~pll_locked_q | hps_reset_q;
 
     wire heartbeat_q;
 
@@ -321,6 +324,7 @@ module de25_nano_top #(
     wire        sd_ack;
     wire [13:0] sd_buff_addr;
     wire [7:0]  sd_buff_dout;
+    wire [7:0]  sd_buff_din;
     wire        sd_buff_wr;
 
     drive_1541 u_drive_1541 (
@@ -343,7 +347,7 @@ module de25_nano_top #(
         .sd_ack       (sd_ack),
         .sd_buff_addr (sd_buff_addr),
         .sd_buff_dout (sd_buff_dout),
-        .sd_buff_din  (),
+        .sd_buff_din  (sd_buff_din),
         .sd_buff_wr   (sd_buff_wr)
     );
 
@@ -543,7 +547,8 @@ module de25_nano_top #(
         .keys_q            (hps_keys_q),
         .restore_q         (hps_restore_q),
         .joy1_q            (hps_joy1_q),
-        .joy2_q            (hps_joy2_q)
+        .joy2_q            (hps_joy2_q),
+        .reset_q           (hps_reset_q)
     );
 
     wire [13:0] disk_m0_address;    // in Bytes; ab 0x2000 der Puffer
@@ -575,6 +580,7 @@ module de25_nano_top #(
         .sd_ack            (sd_ack),
         .sd_buff_addr      (sd_buff_addr),
         .sd_buff_dout      (sd_buff_dout),
+        .sd_buff_din       (sd_buff_din),
         .sd_buff_wr        (sd_buff_wr),
         .img_mounted       (disk_mounted),
         .img_present       (disk_present),
@@ -695,6 +701,7 @@ module de25_nano_top #(
     assign hps_restore_q = 1'b0;
     assign hps_joy1_q    = 5'd0;
     assign hps_joy2_q    = 5'd0;
+    assign hps_reset_q   = 1'b0;
     assign osd_rgb_q     = c64_rgb_q;
     assign osd_de_q      = c64_de_q;
     assign osd_hsync_q   = c64_hsync_q;

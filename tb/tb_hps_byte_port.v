@@ -21,6 +21,8 @@
 //      Bit 0 und den Datenstrom in Ruhe.
 //  13. Joysticks (STATUS Bit 12..8 und 20..16): erscheinen beim C64, lesen
 //      sich zurück; jedes Byte von STATUS lässt sich einzeln schreiben.
+//  14. Reset-Wunsch (STATUS Bit 2): erscheint beim C64 und bleibt auch dann
+//      stehen, wenn dieses Modul selbst im Reset ist.
 
 `timescale 1ns / 1ps
 `default_nettype none
@@ -52,6 +54,7 @@ module tb_hps_byte_port;
     wire [63:0] keys;
     wire        restore;
     wire [4:0]  joy1, joy2;
+    wire        c64_reset;
     reg         rand_ready = 1'b0;
 
     integer     errors = 0;
@@ -80,7 +83,8 @@ module tb_hps_byte_port;
         .keys_q            (keys),
         .restore_q         (restore),
         .joy1_q            (joy1),
-        .joy2_q            (joy2)
+        .joy2_q            (joy2),
+        .reset_q           (c64_reset)
     );
 
     always #5      clk_av = ~clk_av;   // 100 MHz
@@ -202,7 +206,7 @@ module tb_hps_byte_port;
 
         // 4. ohne Byte 0 und auf STATUS
         av_write(DATA,   32'h3333_3333, 4'b1110);
-        av_write(STATUS, 32'h0000_0044, 4'b1111);
+        av_write(STATUS, 32'h0000_0040, 4'b1111);   // Bit ohne Bedeutung
         av_read(STATUS, rd);
         expect_eq(rd, 0, "frei nach wirkungslosem Schreiben");
         repeat (10) @(negedge clk);
@@ -315,6 +319,23 @@ module tb_hps_byte_port;
         repeat (4) @(negedge clk);
         expect_eq({joy2, joy1, restore}, 0, "13. alles losgelassen");
         expect_eq(n_got, 3 + N_RAND, "13. Joysticks liefern kein Byte");
+
+        // 14. Reset-Wunsch von Linux
+        expect_eq(c64_reset, 0, "14. kein Reset-Wunsch anfangs");
+        av_write(STATUS, 32'h0000_0004, 4'b1111);
+        repeat (4) @(negedge clk);
+        expect_eq(c64_reset, 1, "14. Reset-Wunsch");
+        expect_eq(restore, 0, "14. RESTORE unberuehrt");
+        av_read(STATUS, rd);
+        expect_eq(rd, 4, "14. STATUS zuruecklesen");
+        rst = 1'b1;                     // im Top-Level folgt daraus der Reset
+        repeat (6) @(negedge clk);
+        expect_eq(c64_reset, 1, "14. Wunsch bleibt im Reset stehen");
+        av_write(STATUS, 32'h0000_0000, 4'b1111);
+        repeat (4) @(negedge clk);
+        expect_eq(c64_reset, 0, "14. Wunsch zurueckgenommen");
+        rst = 1'b0;
+        repeat (4) @(negedge clk);
 
         if (errors == 0) $display("PASS: tb_hps_byte_port");
         else             $display("FAIL: tb_hps_byte_port (%0d Fehler)", errors);

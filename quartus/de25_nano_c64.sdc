@@ -28,10 +28,13 @@ if {[get_collection_size $hps_byte] > 0} {
 
 # Diskette von Linux (hps_disk_port, nur im Projekt quartus_hps): Block und
 # Anzahl einer Anforderung des Laufwerks wechseln mit clk_sys und werden mit
-# clk_100 ins Leseregister übernommen. Linux wertet sie erst aus, wenn die
-# Anforderung selbst durch den Synchronizer gekommen ist — dann stehen sie
-# seit mindestens zwei Takten still. Der Weg braucht kein Timing.
-set disk_req [get_registers -nowarn {u_hps_disk_port|avs_readdata[*]}]
+# clk_100 ins Leseregister reg_data_q übernommen. Linux wertet sie erst aus,
+# wenn die Anforderung selbst durch den Synchronizer gekommen ist — dann
+# stehen sie seit mindestens zwei Takten still. Der Weg braucht kein Timing.
+# Der Name des Registers muss zum RTL passen: Greift die Zeile ins Leere,
+# rechnet Quartus den Weg als gewöhnlichen Pfad zwischen zwei Takten und
+# meldet eine Verletzung von einigen Nanosekunden.
+set disk_req [get_registers -nowarn {u_hps_disk_port|reg_data_q[*]}]
 if {[get_collection_size $disk_req] > 0} {
     set_false_path -from $clk_sys -to $disk_req
 }

@@ -13,7 +13,11 @@
 //      "beschäftigt" endet. Währenddessen zeigt REQUEST keine Anforderung.
 //   5. Eine zweite Lieferung mit anderer Länge und nur teilweise neu
 //      beschriebenem Puffer (byteenable).
-//   6. Ein Schreibwunsch des Laufwerks wird ohne Daten quittiert.
+//   6. Schreibwunsch des Laufwerks: Das Modul holt die Spur von sich aus ab
+//      (genau so viele Bytes, wie die Spur hat) und meldet sie in REQUEST.
+//      Block und Anzahl bleiben stehen, auch wenn das Laufwerk inzwischen
+//      weiterzieht und schon wieder lesen will. Linux liest die Bytes
+//      richtig aus dem Puffer; nach "abgeholt" kommt die Leseanforderung.
 //   7. "Geliefert" ohne Anforderung bleibt folgenlos.
 //   8. Reset des C64 mitten in der Lieferung: sd_ack fällt, der Port ist
 //      danach frei; die eingelegte Diskette bleibt.
@@ -78,6 +82,7 @@ module tb_hps_disk_port;
         .sd_ack            (sd_ack),
         .sd_buff_addr      (sd_buff_addr),
         .sd_buff_dout      (sd_buff_dout),
+        .sd_buff_din       (sd_buff_din),
         .sd_buff_wr        (sd_buff_wr),
         .img_mounted       (img_mounted),
         .img_present       (img_present),
@@ -99,6 +104,19 @@ module tb_hps_disk_port;
     reg [13:0] addr_old;
     reg [7:0]  data_old;
 
+    // Spurpuffer des Laufwerks beim Abholen: Die Daten kommen zwei Takte
+    // nach der Adresse, wie beim Speicher im echten Core.
+    function [7:0] track_byte(input integer k);
+        track_byte = (k * 13 + 5 + (k >> 8)) & 8'hFF;
+    endfunction
+
+    reg [13:0] din_addr_q;
+    reg [7:0]  sd_buff_din;
+
+    always @(posedge clk) begin
+        din_addr_q  <= sd_buff_addr;
+        sd_buff_din <= track_byte(din_addr_q);
+    end
     always @(posedge clk) begin
         if (sd_ack) {sd_rd, sd_wr} <= 2'b00;    // wie c1541_track
 
@@ -289,19 +307,41 @@ module tb_hps_disk_port;
         expect_eq(got[7], pattern(7, 3), "5. Nachbar danach unveraendert");
         expect_eq(got[4863], pattern(4863, 3), "5. letztes Byte von eben");
 
-        // 6. Schreibwunsch des Laufwerks: quittieren, keine Daten
+        // 6. Schreibwunsch des Laufwerks: Spur 18 einer .D64
         @(negedge clk);
         sd_lba     = 32'd357;
         sd_blk_cnt = 6'd18;
         sd_wr      = 1'b1;
-        repeat (4) @(negedge clk);
-        av_read(REQUEST, rd);
-        expect_eq(rd[1:0], 2'b10, "6. Schreibwunsch sichtbar");
         n_bytes = 0;
-        commit_and_wait;
+        rd = 32'd0;
+        for (i = 0; i < 100000 && !rd[1]; i = i + 1) av_read(REQUEST, rd);
+        expect_eq(rd[1:0], 2'b10, "6. Spur liegt zum Abholen bereit");
         expect_eq(sd_wr, 0, "6. Schreibwunsch quittiert");
-        expect_eq(n_bytes, 0, "6. keine Daten");
-        expect_eq(sd_ack, 0, "6. sd_ack danach");
+        expect_eq(sd_ack, 0, "6. sd_ack nach dem Abholen");
+        expect_eq(n_bytes, 0, "6. nichts ins Laufwerk geschrieben");
+        // das Laufwerk zieht weiter und will die nächste Spur lesen
+        @(negedge clk);
+        sd_lba     = 32'd376;
+        sd_blk_cnt = 6'd20;
+        sd_rd      = 1'b1;
+        repeat (6) @(negedge clk);
+        av_read(REQUEST, rd);
+        expect_eq(rd, {16'd357, 2'b00, 6'd18, 6'd0, 2'b10}, "6. REQUEST bleibt bei der geschriebenen Spur");
+        for (i = 0; i < 19 * 64; i = i + 1) begin
+            av_read(BUFFER + i[11:0], rd);
+            if (rd !== {track_byte(4*i+3), track_byte(4*i+2), track_byte(4*i+1), track_byte(4*i)}) begin
+                if (errors < 20) $display("FAIL: 6. Wort %0d ist %08x", i, rd);
+                errors = errors + 1;
+            end
+        end
+        commit_and_wait;
+        av_read(REQUEST, rd);
+        expect_eq(rd, {16'd376, 2'b00, 6'd20, 6'd0, 2'b01}, "6. danach die Leseanforderung");
+        fill_buffer(21 * 256, 9);
+        commit_and_wait;
+        expect_eq(n_bytes, 21 * 256, "6. Lieferung nach dem Abholen");
+        expect_eq(got[5375], pattern(5375, 9), "6. letztes Byte der Lieferung");
+        n_bytes = 0;
 
         // 7. geliefert ohne Anforderung
         commit_and_wait;
@@ -310,6 +350,7 @@ module tb_hps_disk_port;
 
         // 8. Reset des C64 mitten in der Lieferung
         @(negedge clk);
+        n_order = 0;
         sd_rd = 1'b1;
         repeat (4) @(negedge clk);
         av_write(CONTROL, 32'd1, 4'b1111);
