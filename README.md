@@ -2,9 +2,9 @@
 
 A step-by-step rebuild of the Commodore 64 on the Terasic DE25-Nano
 (Intel Agilex 5 SoC), modelled on the MiSTer architecture: the FPGA reproduces
-the C64 hardware cycle-accurately, and the HPS (ARM cores running Linux) is
-meant to take over the service tasks — menu, loading `.PRG`/`.D64` files,
-configuration.
+the C64 hardware cycle-accurately, and the HPS (ARM cores running Linux)
+takes over the service tasks — USB keyboard, on-screen menu, supplying
+`.PRG` and `.D64` files.
 
 This is a learning project. It is built milestone by milestone, each one
 leaving a system that runs and can be tested, and every own module comes with
@@ -15,10 +15,13 @@ a testbench.
 
 ## Status
 
-The C64 runs on the board: BASIC start screen, picture and SID sound over
-HDMI, programs loaded from the PC or from a disk image. Timing-critical software works, including
-an FLI picture and test programs with SID sound. Linux runs next to it on the
-HPS and can type on the C64 keyboard and load programs into its memory.
+The C64 runs on the board as a stand-alone machine: switch it on, and the
+design starts from the board's QSPI flash while Linux boots from the microSD
+card. Picture and SID sound come out over HDMI. A USB keyboard is the C64
+keyboard, its numeric keypad is a joystick, and F12 opens a menu on top of
+the picture that inserts disk images into a 1541 drive or loads programs
+from a USB stick. Timing-critical software works, including an FLI picture,
+test programs with SID sound and games with their own fast loaders.
 
 | # | Milestone | State |
 |---|-----------|-------|
@@ -28,26 +31,36 @@ HPS and can type on the C64 keyboard and load programs into its memory.
 | 4 | Text mode video over HDMI | done |
 | 5 | Real VIC-II (sprites, bad lines, raster interrupts) | done |
 | 6 | SID and both CIAs, sound over HDMI | done |
-| 7 | HPS integration | in progress |
+| 7 | HPS integration: keyboard, 1541 disk drive, menu, start from flash | done |
 
-Milestone 7 so far: a second Quartus project builds the same C64 together
-with the HPS. Linux boots and reaches the FPGA over the Lightweight
-HPS-to-FPGA bridge: it switches three LEDs, and it sends bytes to the C64
-through a register of this project (`rtl/io/hps_byte_port.v`) — the same
-keystrokes and load blocks that the PC sends over the UART.
+What milestone 7 added. A second Quartus project builds the same C64 together
+with the HPS. Linux reaches the FPGA over the Lightweight HPS-to-FPGA bridge
+through registers of this project, and one service on Linux (`sw/py/c64d.py`)
+does the rest:
+
+- **Keyboard:** a USB keyboard at the board's USB host connector, mapped by
+  key position; Page Up is RESTORE.
+- **Disk drive:** a 1541 (the real drive's CPU and ROM, so fast loaders work)
+  whose tracks Linux supplies from a `.D64` file. Writing works too: what the
+  C64 saves is in the file a second later, and a one-time backup
+  `<name>.bak` is kept next to it.
+- **Menu:** F12 opens a window on top of the picture, while the C64 keeps
+  running underneath — insert or change a disk, load a `.PRG`, choose the
+  joystick port, reset the C64.
+- **Joystick:** the numeric keypad of the USB keyboard, on port 1 or 2.
+- **LEDs:** state of the service, drive activity, unsaved changes.
+
+The build without the HPS still exists for quick tests; there the keyboard
+and the programs come from a PC over the UART.
 
 Not there yet:
 
-- Keyboard: a USB keyboard works through Linux on the HPS, in the HPS build
-  only. Otherwise keystrokes come from a PC over
-  the UART (see [Controlling the C64](#controlling-the-c64)).
-- Disks: a 1541 disk drive reads `.D64` images that Linux on the HPS supplies
-  (HPS build only), chosen from a menu on the screen, and writes to them.
-  `.G64` images are prepared but untried and stay write-protected. No tape
-  or cartridges.
-- Joysticks: the numeric keypad of the USB keyboard acts as one (HPS build
-  only); a real USB joystick is not supported yet.
+- USB gamepads or joysticks (only the numeric keypad).
+- `.G64` images are prepared but untried and stay write-protected.
+- No tape, no cartridges, a single drive (device 8).
 - PAL only.
+- Files get onto the board by USB stick or over the serial console; there is
+  no network transfer.
 
 ### What is inside
 
@@ -59,10 +72,13 @@ Not there yet:
 | CIA 6526 (two) | MiSTer, `rtl/io/vendor/mister_cia` |
 | Disk drive 1541 | MiSTer (an older revision), `rtl/drive/vendor/mister_c1541`, wrapped in `rtl/drive/drive_1541.sv` |
 | Memory map, banking, HDMI output, I2S audio, UART, loader, top level | written for this project |
+| Registers towards Linux, menu window, status LEDs (`rtl/io/hps_byte_port.v`, `rtl/drive/hps_disk_port.v`, `rtl/video/video_osd.v`, `rtl/io/hps_status_led.v`) | written for this project |
 
 The whole C64 runs in a single clock domain at 31.5 MHz. The VIC-II produces a
 PAL picture, which is line-doubled and sent to the board's HDMI transmitter as
-720 x 576 at 50 Hz.
+720 x 576 at 50 Hz. The HPS side of the registers runs on its own 100 MHz
+clock; every signal that crosses between the two goes through a synchronizer
+or a handshake.
 
 ## Repository layout
 
@@ -73,9 +89,11 @@ rtl/            Verilog/VHDL modules, one file per module
                 (only the CPU is checked in, the others are fetched by script)
 tb/             testbenches (tb_<module>.v) and the simulation script
 sw/asm/         6502 assembler sources (test ROMs)
-sw/py/          Python helpers: ROM conversion, terminal and loader
+sw/py/          Python: on the PC ROM conversion, fetching the cores, terminal
+                and loader; on the board the service c64d and its helpers
 quartus/        Quartus project: the C64 alone
-quartus_hps/    Quartus project: the C64 together with the HPS
+quartus_hps/    Quartus project: the C64 together with the HPS, and the
+                scripts that write it into the flash
 roms/           your own ROM files — not part of the repository
 docs/           notes, pin assignments
 ```
@@ -145,7 +163,7 @@ python sw/py/c64_term.py COM12 --load game.prg       load a program first
 python sw/py/c64_term.py COM12 --load game.prg --run load it and type RUN
 ```
 
-`COM12` is the port on the developer's machine; look up yours in the Windows
+`COM12` is an example; look up yours in the Windows
 Device Manager. The board registers two serial ports — the other one is the
 Linux console of the HPS.
 
@@ -173,52 +191,59 @@ same serial port.
 
 ### From Linux on the HPS
 
-With the HPS build, log in on the HPS serial console (115200 baud, 8N1).
-Copy `sw/py/c64_hps.py` and `sw/py/c64_blocks.py` into one directory on the
-board; then Linux can type and load programs:
+With the HPS build, everything runs through one service on Linux,
+`sw/py/c64d.py`. Installed as a systemd unit (`sw/py/c64d.service`), it
+starts at boot, so the board needs no PC and no login. Setting it up is
+described in [INSTALL.md](INSTALL.md), section D6.
+
+**Keyboard.** A USB keyboard at the board's USB host connector is the C64
+keyboard. The service passes on which keys are held down, so key combinations
+and games work. Keys are mapped by position, not by what is printed on them:
+the key right of `L` is the colon, as on a C64. Esc is RUN/STOP, Tab is CTRL,
+left Ctrl is the Commodore key, Page Up is RESTORE; the full table is at the
+top of `sw/py/c64_keys.py`.
+
+**Joystick.** The numeric keypad: 8/2/4/6 are the directions, 7/9/1/3 the
+diagonals, 0 and right Ctrl are fire. The menu sets the port (most games
+expect port 2).
+
+**Menu.** F12 opens a window on top of the picture. It lists the `.d64`,
+`.g64` and `.prg` files on a USB stick (FAT32, not exFAT), which can sit in a
+hub next to the keyboard; without a stick, the files in the folder of the
+script.
+
+| Key | Function |
+|-----|----------|
+| Arrow up/down, Page Up/Down, Home, End | choose an entry |
+| Enter | insert the disk, load the program, switch the joystick port, reset the C64 |
+| Esc or F12 | close the menu |
+
+The C64 keeps running underneath, so a disk can be changed in the middle of a
+game. A `.PRG` is written straight into the C64's RAM; if it starts at the
+BASIC start address, the service types `RUN`.
+
+**Disk drive.** An inserted disk is used as on a real C64: `LOAD "$",8`,
+`LOAD "*",8,1`, `SAVE "NAME",8`. A `.D64` is writable: what the C64 writes is
+in the file about a second later. Before the first change the service puts a
+backup `<name>.bak` next to the file, once. While `LEDR2` is lit, the file is
+not up to date — do not power off or pull the stick. The drive stays switched
+on when the disk is changed or removed, so a fast loader that a game has put
+into the drive survives.
+
+For experiments, the single steps also exist as scripts of their own; they
+are used instead of the service, not next to it (a lock makes a second one
+end with a message):
 
 ```
+sudo python3 c64_keys.py                          USB keyboard only
+sudo python3 c64_disk.py game.d64                 insert one disk, read-only, until Ctrl+C
 sudo python3 c64_hps.py --type "PRINT 1+1"        type a line, then RETURN
 sudo python3 c64_hps.py --load game.prg --run     load a program and type RUN
 ```
 
-The bytes go through a register at `0x2001_0100` into the same path as the
-bytes from the PC, so do not load from both sides at the same time.
-
-The comfortable way is the service `sw/py/c64d.py`, which combines USB
-keyboard, disk drive and a menu: F12 opens a window on top of the picture
-that lists the `.d64`, `.g64` and `.prg` files on a USB stick (FAT32); Enter
-inserts the disk or loads the program. The C64 keeps running underneath, so a
-disk can be changed in the middle of a game. Setting it up is described in
-[INSTALL.md](INSTALL.md), section D6.
-
-The single steps also exist as scripts of their own. A disk image is inserted
-into the 1541 drive with `sw/py/c64_disk.py`:
-
-```
-sudo python3 c64_disk.py game.d64
-```
-
-The disk stays inserted as long as the script runs; Ctrl+C removes it, and
-the drive is then switched off. After inserting, give the drive a good two
-seconds, then use it as on a real C64: `LOAD "$",8`, `LOAD "*",8,1`. The disk
-is write-protected.
-
-A USB keyboard at the board's USB host connector becomes the C64 keyboard
-with a third script, `sw/py/c64_keys.py`:
-
-```
-sudo python3 c64_keys.py
-```
-
-To start it at boot, install `sw/py/c64-keys.service` as a systemd unit; the
-steps are at the top of that file.
-
-It passes on which keys are held down, so key combinations and games work.
-Keys are mapped by position, not by what is printed on them: the key right of
-`L` is the colon, as on a C64. Esc is RUN/STOP, Tab is CTRL, left Ctrl is the
-Commodore key; Page Up is RESTORE; the full table is at the top of the script.
-
+The bytes of `c64_hps.py` go through a register at `0x2001_0100` into the
+same path as the bytes from the PC, so do not load from both sides at the
+same time.
 
 The register map is in [quartus_hps/README.md](quartus_hps/README.md).
 
@@ -248,6 +273,6 @@ with different terms, described in the README next to each of them:
 ## Acknowledgements
 
 - [MiSTer C64 core](https://github.com/MiSTer-devel/C64_MiSTer) — source of
-  the CPU, VIC-II, SID and CIA cores and the model for the architecture
+  the CPU, VIC-II, SID, CIA and 1541 cores and the model for the architecture
 - Peter Wendrich's [FPGA64](http://www.syntiac.com/fpga64.html)
 - Terasic, for the DE25-Nano reference designs

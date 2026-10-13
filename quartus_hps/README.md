@@ -66,7 +66,7 @@ Quartus beim HPS-Design nach etwa 40 Sekunden ab
 einen Laufwerksbuchstaben läuft derselbe Bau durch:
 
 ```
-subst Q: C:\Users\worst\Documents\VSCode-Workspace\Quartus-FPGA\DE25-Nano\MiSTer
+subst Q: <Pfad zum Repository>
 ```
 
 Danach in Quartus `Q:\quartus_hps\de25_nano_c64_hps.qpf` öffnen. `subst` gilt
