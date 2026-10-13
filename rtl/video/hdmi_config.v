@@ -9,6 +9,10 @@
 //         Register $0A = $00 sagt dem Baustein, dass der Tontakt MCLK das
 //         128-Fache der Abtastrate ist (Terasic liefert das 256-Fache, die
 //         Voreinstellung). Der Ton kommt als I2S mit 16 Bit; siehe i2s_tx.
+//         Zweite Abweichung: Der Audio-Infoframe meldet 2 Kanäle ($73 = $01,
+//         $76 = $00). Terasic meldet dort 8 Kanäle ($07, $1F), obwohl nur
+//         Stereo gesendet wird; ein Monitor stört sich daran nicht, ein
+//         Mehrkanal-Empfänger kann deshalb stumm bleiben.
 //         Zieht der Baustein seine Interrupt-Leitung auf 0 (z. B. Monitor
 //         neu eingesteckt — dabei fällt er in den Schlafmodus zurück), wird
 //         die Konfiguration wiederholt.
@@ -60,8 +64,8 @@ module hdmi_config #(
             6'd14:   reg_entry = 16'h5510;  // AVI-Infoframe: RGB
             6'd15:   reg_entry = 16'h5608;  // AVI-Infoframe: Seitenverhältnis
             6'd16:   reg_entry = 16'h96F6;  // Interrupts quittieren
-            6'd17:   reg_entry = 16'h7307;  // Audio: Kanalzahl
-            6'd18:   reg_entry = 16'h761F;  // Audio: Lautsprecherzuordnung
+            6'd17:   reg_entry = 16'h7301;  // Audio-Infoframe: 2 Kanäle
+            6'd18:   reg_entry = 16'h7600;  // Audio-Infoframe: Lautsprecher vorn links/rechts
             6'd19:   reg_entry = 16'h9803;  // ab hier Pflichtwerte laut Hersteller
             6'd20:   reg_entry = 16'h9902;
             6'd21:   reg_entry = 16'h9AE0;

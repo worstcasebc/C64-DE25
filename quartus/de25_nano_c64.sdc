@@ -4,14 +4,20 @@
 # Angabe weiß Quartus nicht, wie viel Zeit ein Signal zwischen zwei Flipflops
 # haben darf, und kann weder gezielt optimieren noch Verletzungen melden.
 
-# Den 50-MHz-Takt an CLOCK0_50 und die beiden PLL-Ausgänge legt die PLL-IP
-# mit ihrer eigenen .sdc an (u_pll_c64|iopll_0_refclk, ..._outclk0,
-# ..._outclk1); ein eigenes create_clock hier würde ignoriert.
-# clk_sys = outclk0 = 31,5 MHz ist der Takt des ganzen Designs.
+# Den 50-MHz-Takt an CLOCK0_50 und die PLL-Ausgänge legen die PLL-IPs mit
+# ihrer eigenen .sdc an (u_pll_c64|iopll_0_refclk, ..._outclk0, ..._outclk1,
+# u_pll_video|pll_video_outclk0, ..._outclk1); ein eigenes create_clock hier
+# würde ignoriert.
+# clk_sys = 31,5 MHz ist der Takt des C64, clk_vid = 74,25 MHz der Pixeltakt
+# der Bildausgabe (720p50). Zwischen beiden gibt es nur zwei Wege, beide in
+# video_upscaler: die Bildspeicher, in denen kein Flipflop der einen Seite
+# eines der anderen speist, und den Stand des Schreibers, der durch einen
+# Synchronizer läuft (nächster Absatz).
 set clk_sys [get_clocks {u_pll_c64|iopll_0_outclk0}]
+set clk_vid [get_clocks {u_pll_video|pll_video_outclk0}]
 
-# Alles, was in einem Synchronizer (sync_2ff) ankommt, ist asynchron zu
-# clk_sys: Taster, Schalter, UART-Empfang, I2C-Daten, der Interrupt des
+# Alles, was in einem Synchronizer (sync_2ff) ankommt, ist asynchron zum
+# Takt, der es übernimmt: Taster, Schalter, UART-Empfang, I2C-Daten, der Interrupt des
 # HDMI-Senders und das locked-Signal der PLL. Die erste Stufe braucht kein
 # Timing — genau dafür ist der Synchronizer da.
 set_false_path -to   [get_registers {*|meta_q[*]}]
@@ -43,12 +49,24 @@ if {[get_collection_size $disk_req] > 0} {
 # selbst in der Bitmitte ab); ein Bit dauert 273 Takte.
 set_false_path -to [get_ports {LEDR[*] FPGA_UART_TX}]
 
-# HDMI-Video: Die Daten wechseln mit der steigenden Flanke von clk_sys,
-# HDMI_TX_CLK ist derselbe Takt um 180 Grad verschoben. Der Sender übernimmt
-# die Daten also eine halbe Periode (knapp 16 ns) nach dem Wechsel. Gegen
-# diese Reserve sind die Laufzeitunterschiede zwischen den Pins klein;
-# deshalb hier keine genaue Prüfung.
-set_false_path -to [get_ports {HDMI_TX_CLK HDMI_TX_D[*] HDMI_TX_DE HDMI_TX_HS HDMI_TX_VS}]
+# HDMI-Video: Die Daten wechseln mit der steigenden Flanke von clk_vid,
+# der Sender ADV7513 übernimmt sie mit der steigenden Flanke von HDMI_TX_CLK.
+# Er verlangt, dass die Daten 1,8 ns vor dieser Flanke stehen (Setup) und
+# 1,3 ns danach noch stehen bleiben (Hold) — Datenblatt, Tabelle "AC
+# Specifications". Bei 74,25 MHz (Periode 13,5 ns) ist das nicht mehr von
+# selbst erfüllt, deshalb wird es hier geprüft:
+#   - HDMI_TX_CLK ist für die Analyse ein eigener Takt, abgeleitet vom
+#     zweiten Ausgang der PLL (derselbe Takt, in der Phase verschoben).
+#   - set_output_delay beschreibt den Empfänger: -max ist seine Setup-Zeit,
+#     -min seine Hold-Zeit mit umgekehrtem Vorzeichen.
+# Die Verschiebung von 270 Grad (10,1 ns) steht in quartus/ip/pll_video.ip.
+# Sie ist so gewählt, dass die Flanke mitten in den gültigen Bereich fällt:
+# Die Daten brauchen vom Flipflop bis zum Pin länger als der Takt (bei 180
+# Grad blieben nur 0,7 ns Setup-Reserve, aber 7 ns Hold-Reserve).
+set hdmi_clk_src [get_clock_info -targets [get_clocks {u_pll_video|pll_video_outclk1}]]
+create_generated_clock -name hdmi_tx_clk -source $hdmi_clk_src [get_ports HDMI_TX_CLK]
+set_output_delay -clock hdmi_tx_clk -max  1.8 [get_ports {HDMI_TX_D[*] HDMI_TX_DE HDMI_TX_HS HDMI_TX_VS}]
+set_output_delay -clock hdmi_tx_clk -min -1.3 [get_ports {HDMI_TX_D[*] HDMI_TX_DE HDMI_TX_HS HDMI_TX_VS}]
 
 # I2C zum HDMI-Sender: 100 kHz, ein Viertel-Bit dauert 79 Takte.
 set_false_path -to [get_ports {HDMI_I2C_SCL HDMI_I2C_SDA}]
@@ -61,7 +79,7 @@ set_false_path -to [get_ports {HDMI_MCLK HDMI_SCLK HDMI_LRCLK HDMI_I2S}]
 # Der Design Assistant (Regel TMC-20012) verlangt für jeden Ausgang eine
 # Angabe, relativ zu welchem Takt er betrachtet wird — auch wenn der Pfad
 # oben vom Timing ausgenommen ist. 0 ns = "keine externe Anforderung".
-set_output_delay -clock $clk_sys 0 [get_ports {LEDR[*] FPGA_UART_TX HDMI_TX_CLK HDMI_TX_D[*] HDMI_TX_DE HDMI_TX_HS HDMI_TX_VS HDMI_I2C_SCL HDMI_I2C_SDA HDMI_MCLK HDMI_SCLK HDMI_LRCLK HDMI_I2S}]
+set_output_delay -clock $clk_sys 0 [get_ports {LEDR[*] FPGA_UART_TX HDMI_I2C_SCL HDMI_I2C_SDA HDMI_MCLK HDMI_SCLK HDMI_LRCLK HDMI_I2S}]
 
 # JTAG-Takt: existiert nur, wenn Signal Tap (oder anderes JTAG-Debug) im
 # Design steckt. Er kommt vom USB-Blaster und hat keinen Bezug zu clk_sys,

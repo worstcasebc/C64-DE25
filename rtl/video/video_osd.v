@@ -9,11 +9,11 @@
 //         kommen aus demselben Zeichensatz-ROM wie beim C64.
 //         Im Fenster erscheinen gesetzte Pixel weiß, alle anderen zeigen
 //         das Bild darunter auf ein Viertel abgedunkelt. Ein Zeichen ist
-//         16 x 16 Bildpunkte groß, so groß wie ein Zeichen des C64 nach dem
-//         Zeilenverdoppler.
+//         16 x 16 Bildpunkte groß (ein Zeichen des C64 misst in 720p50
+//         24 x 24).
 // Takte:  Zwei Domänen.
 //           clk_av  Takt der Brücke (100 MHz): Schreiben in den Textspeicher
-//           clk     Bildtakt (31,5 MHz): alles Übrige
+//           clk     Bildtakt (clk_vid, 74,25 MHz): alles Übrige
 //         Der Textspeicher (ram_2clk) ist der Übergang; "sichtbar" kommt
 //         durch einen sync_2ff. Kein Reset nötig außer für "sichtbar".
 // Ports:  Seite HPS, nur Schreiben (avs_address zählt Worte):
@@ -26,7 +26,8 @@
 //         später hinaus (rgb_q, de_q, hsync_q, vsync_q), mit oder ohne
 //         Fenster. Die Lage im Bild wird aus de und vsync mitgezählt: X0, Y0
 //         sind die linke obere Ecke des Fensters in Bildpunkten und Zeilen
-//         des sichtbaren Bildes (Default: mittig in 720 x 576).
+//         des sichtbaren Bildes (Default: mittig in 720 x 576; das Top-Level
+//         setzt sie für 1280 x 720).
 
 `default_nettype none
 

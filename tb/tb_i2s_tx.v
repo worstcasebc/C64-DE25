@@ -11,6 +11,10 @@
 //    SCLK-Hälfte ist 5 Takte lang.
 // 5. MCLK hat eine Periode von 5 Systemtakten, also zwei je SCLK-Hälfte, und
 //    SCLK wechselt mit der steigenden Flanke von MCLK.
+// 6. Zweiter Prüfling mit dem gebrochenen Verhältnis des Boards (512/2625,
+//    für genau 48 kHz aus 31,5 MHz): Ein MCLK-Takt ist 5 oder 6 Systemtakte
+//    lang, 512 MCLK-Takte dauern immer genau 2625 Systemtakte, und ein Paar
+//    besteht aus 128 MCLK-Takten.
 
 `timescale 1ns / 1ps
 `default_nettype none
@@ -114,6 +118,53 @@ module tb_i2s_tx;
         end
     end
 
+    // 6. Gebrochenes Verhältnis
+    wire frac_mclk, frac_lrclk;
+
+    i2s_tx #(.MCLK_NUM(512), .MCLK_DEN(2625)) dut_frac (
+        .clk     (clk),
+        .rst     (rst),
+        .left    (left),
+        .right   (right),
+        .mclk_q  (frac_mclk),
+        .sclk_q  (),
+        .lrclk_q (frac_lrclk),
+        .sdata_q ()
+    );
+
+    integer fc = 0;                 // Systemtakte seit dem Reset
+    integer frac_edges = 0;         // steigende MCLK-Flanken
+    integer frac_last = 0;          // Zeitpunkt der letzten Flanke
+    integer frac_mark = 0;          // Zeitpunkt der Flanke vor 512 Flanken
+    integer frac_in_pair = 0;       // MCLK-Takte im laufenden Paar
+    integer frac_pairs = 0;
+    reg     frac_mclk_prev = 1'b0, frac_lrclk_prev = 1'b1;
+
+    always @(negedge clk) begin
+        if (!rst) begin
+            fc = fc + 1;
+            if (frac_mclk && !frac_mclk_prev) begin
+                if (frac_edges > 0 && fc - frac_last != 5 && fc - frac_last != 6)
+                    fail("MCLK-Takt (512/2625) ist weder 5 noch 6 Takte lang");
+                if (frac_edges % 512 == 0) begin
+                    if (frac_edges > 0 && fc - frac_mark != 2625)
+                        fail("512 MCLK-Takte (512/2625) dauern nicht 2625 Takte");
+                    frac_mark = fc;
+                end
+                frac_last    = fc;
+                frac_edges   = frac_edges + 1;
+                frac_in_pair = frac_in_pair + 1;
+            end
+            if (!frac_lrclk && frac_lrclk_prev) begin
+                if (frac_pairs > 0 && frac_in_pair != 128) fail("Paar (512/2625) hat nicht 128 MCLK-Takte");
+                frac_pairs   = frac_pairs + 1;
+                frac_in_pair = 0;
+            end
+            frac_mclk_prev  = frac_mclk;
+            frac_lrclk_prev = frac_lrclk;
+        end
+    end
+
     // Erwartetes Bild eines Kanals im 32-Bit-Fenster: 1 Bit Vorlauf, 16 Bit
     // Daten, 15 Bit Null.
     function [31:0] slot(input [15:0] value);
@@ -164,6 +215,11 @@ module tb_i2s_tx;
         @(posedge sclk);
         if ((($time - t_start) / 20) != 10240) begin
             $display("FAIL: 16 Paare dauern %0d Takte, erwartet 10240", ($time - t_start) / 20);
+            errors = errors + 1;
+        end
+
+        if (frac_edges < 4 * 512 || frac_pairs < 16) begin
+            $display("FAIL: zu wenig gemessen (512/2625): %0d MCLK-Takte, %0d Paare", frac_edges, frac_pairs);
             errors = errors + 1;
         end
 

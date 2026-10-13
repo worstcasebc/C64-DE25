@@ -23,6 +23,7 @@ set_global_assignment -name VERILOG_FILE ../rtl/io/hps_byte_port.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/video_timing.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/video_colorbars.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/video_scandoubler.v
+set_global_assignment -name VERILOG_FILE ../rtl/video/video_upscaler.v
 set_global_assignment -name VERILOG_FILE ../rtl/video/c64_palette.v
 set_global_assignment -name VHDL_FILE ../rtl/video/vendor/fpga64/video_vicII_656x.vhd
 set_global_assignment -name VERILOG_FILE ../rtl/audio/i2s_tx.v
@@ -180,6 +181,7 @@ set_instance_assignment -name IO_STANDARD "3.3-V LVCMOS" -to HDMI_I2S -entity de
 set_global_assignment -name PWRMGT_VOLTAGE_OUTPUT_FORMAT "LINEAR FORMAT"
 set_global_assignment -name PWRMGT_LINEAR_FORMAT_N "-12"
 set_global_assignment -name IP_FILE ../quartus/ip/pll_c64.ip
+set_global_assignment -name IP_FILE ../quartus/ip/pll_video.ip
 # Die eigene .sdc muss nach der PLL-IP stehen: Sie benutzt deren Takte, und
 # Quartus liest die Dateien in dieser Reihenfolge.
 set_global_assignment -name SDC_FILE ../quartus/de25_nano_c64.sdc

@@ -13,12 +13,15 @@
 // Ports:  wr_en = 1 schreibt wr_din nach wr_addr.
 //         Lesedaten erscheinen eine Flanke von rd_clk nach rd_addr.
 // Inhalt: Beim Start überall 0 — wie das Block-RAM im FPGA nach dem Laden.
+// Parameter: DEPTH — Anzahl der Zellen, falls es weniger als 2^ADDR_W sein
+//         sollen (spart Block-RAM, wenn die Größe keine Zweierpotenz ist).
 
 `default_nettype none
 
 module ram_2clk #(
     parameter ADDR_W = 11,
-    parameter DATA_W = 8
+    parameter DATA_W = 8,
+    parameter DEPTH  = 1 << ADDR_W
 ) (
     input  wire              wr_clk,
     input  wire              wr_en,
@@ -29,13 +32,13 @@ module ram_2clk #(
     output reg  [DATA_W-1:0] rd_dout_q
 );
 
-    reg [DATA_W-1:0] mem [0:(1<<ADDR_W)-1];
+    reg [DATA_W-1:0] mem [0:DEPTH-1];
 
     // Nur für die Simulation; Quartus überspringt den Abschnitt.
     // synthesis translate_off
     integer i;
     initial begin
-        for (i = 0; i < (1 << ADDR_W); i = i + 1) mem[i] = {DATA_W{1'b0}};
+        for (i = 0; i < DEPTH; i = i + 1) mem[i] = {DATA_W{1'b0}};
     end
     // synthesis translate_on
 

@@ -101,13 +101,19 @@ Datenleitungen, alle 3.3-V LVCMOS:
 | HDMI_TX_D[6]  | PIN_AV16 | HDMI_TX_D[14]  | PIN_BV4  | HDMI_TX_D[22]  | PIN_CP1  |
 | HDMI_TX_D[7]  | PIN_AV11 | HDMI_TX_D[15]  | PIN_BU23 | HDMI_TX_D[23]  | PIN_CU2  |
 
-**Bildformat** (Monitortest am 11.10.2026): Der VIC-II liefert ein PAL-Bild,
-das zeilenverdoppelt als Raster mit 1008 Punkten pro Zeile und 624 Zeilen bei
-31,5 MHz ausgegeben wird (31,25 kHz, 50,08 Hz). Mit 720 x 576 sichtbaren
+**Bildformat:** 720p50 nach CEA-861 — 1280 x 720 sichtbar, 1980 x 750
+gesamt, Pixeltakt 74,25 MHz aus `quartus/ip/pll_video.ip` (50 MHz -> 2 x
+74,25 MHz, 0 und 270 Grad; der verschobene Takt geht an `HDMI_TX_CLK`),
+Sync-Impulse high-aktiv. Das Bild des VIC-II läuft dazu über einen
+Bildspeicher (`rtl/video/video_upscaler.v`).
+
+Früheres Bildformat (Monitortest am 11.10.2026, `video_scandoubler`): das
+PAL-Bild zeilenverdoppelt als Raster mit 1008 Punkten pro Zeile und 624 Zeilen
+bei 31,5 MHz (31,25 kHz, 50,08 Hz). Mit 720 x 576 sichtbaren
 Punkten nimmt der Monitor des Entwicklers das als „720x576, 50 Hz" an; mit
 768 x 544 sichtbaren Punkten im selben Raster lehnt er es ab („input timing
-not supported"). Der Pixeltakt kommt aus `quartus/ip/pll_c64.ip` (50 MHz ->
-2 x 31,5 MHz, 0 und 180 Grad; der verschobene Takt geht an `HDMI_TX_CLK`).
+not supported"). Ein Fernseher lehnt dieses Raster ganz ab („unsupported
+mode"), weil es keinem Normformat entspricht — daher der Wechsel auf 720p50.
 
 Ton als I2S (alle 3.3-V LVCMOS): HDMI_MCLK PIN_CF1, HDMI_SCLK PIN_BW1,
 HDMI_LRCLK PIN_BR6, HDMI_I2S PIN_CB2.

@@ -11,13 +11,22 @@
 //         Empfänger (hier der HDMI-Sender ADV7513) übernimmt sie mit der
 //         steigenden. Von den 32 Bitplätzen je Kanal werden 16 benutzt, der
 //         Rest ist 0.
-// Takt:   clk, synchroner Reset rst (aktiv high). Alle Tontakte entstehen
-//         durch glattes Teilen: MCLK = clk / MCLK_DIV, SCLK = MCLK / 2,
-//         LRCLK = SCLK / 64. Mit 31,5 MHz und MCLK_DIV = 5 sind das
-//         6,3 MHz, 3,15 MHz und 49219 Abtastwerte pro Sekunde — 2,5 % über
-//         den üblichen 48000. Die Tonhöhe stimmt trotzdem, weil genau so
-//         viele Werte gesendet wie abgetastet werden; nur der Empfänger
-//         muss die leicht abweichende Rate annehmen.
+// Takt:   clk, synchroner Reset rst (aktiv high). SCLK = MCLK / 2 und
+//         LRCLK = SCLK / 64 entstehen durch glattes Teilen. MCLK selbst
+//         entsteht aus clk im Verhältnis MCLK_NUM / MCLK_DEN, das kein
+//         glatter Teiler sein muss: Ein Zähler wächst in jedem Takt um
+//         MCLK_NUM; überschreitet er MCLK_DEN, beginnt ein neuer MCLK-Takt
+//         und der Überschuss bleibt stehen — wie ein Schaltjahr, das den
+//         Kalender im Mittel richtig hält. Ein MCLK-Takt ist dann mal einen
+//         Systemtakt kürzer, mal länger, im Mittel aber genau richtig.
+//         Auf dem Board: 31,5 MHz * 512 / 2625 = 6,144 MHz, also genau
+//         48000 Abtastwerte pro Sekunde (MCLK-Takte zu 5 oder 6
+//         Systemtakten). Das ist nötig, weil Fernseher und Soundbars nur
+//         die genormten Raten annehmen; mit dem glatten Teiler 5 waren es
+//         49219 (2,5 % daneben) — ein Monitor spielte das, eine Soundbar
+//         blieb stumm.
+// Parameter: MCLK_NUM, MCLK_DEN — MCLK = clk * MCLK_NUM / MCLK_DEN.
+//         Default 1/5: glatter Teiler 5.
 // Ports:  left/right — Abtastwerte mit Vorzeichen; sie werden am Anfang
 //         jedes Paars übernommen und müssen nicht synchron dazu wechseln.
 //         mclk_q, sclk_q, lrclk_q, sdata_q — die vier Leitungen.
@@ -25,7 +34,8 @@
 `default_nettype none
 
 module i2s_tx #(
-    parameter MCLK_DIV = 5
+    parameter MCLK_NUM = 1,
+    parameter MCLK_DEN = 5
 ) (
     input  wire               clk,
     input  wire               rst,
@@ -37,19 +47,24 @@ module i2s_tx #(
     output reg                sdata_q
 );
 
-    localparam DIV_W = (MCLK_DIV > 1) ? $clog2(MCLK_DIV) : 1;
+    localparam ACC_W = $clog2(MCLK_DEN + MCLK_NUM);
 
-    reg [DIV_W-1:0] div_q;          // Position innerhalb eines MCLK-Takts
+    reg [ACC_W-1:0] acc_q;          // Position innerhalb eines MCLK-Takts, 0..MCLK_DEN-1
     reg [5:0]       bit_q;          // Bitplatz im Paar: 0-31 links, 32-63 rechts
     reg [15:0]      left_q;
     reg [15:0]      right_q;
 
-    wire       mclk_start = (div_q == MCLK_DIV - 1);    // danach beginnt ein MCLK-Takt
+    localparam [ACC_W-1:0] NUM = MCLK_NUM,
+                           DEN = MCLK_DEN;
+
+    wire [ACC_W-1:0] acc_sum    = acc_q + NUM;
+    wire             mclk_start = (acc_sum >= DEN);     // danach beginnt ein MCLK-Takt
+    wire [ACC_W-1:0] acc_next   = mclk_start ? acc_sum - DEN : acc_sum;
     wire [5:0] next_bit   = bit_q + 1'b1;
 
     always @(posedge clk) begin
         if (rst) begin
-            div_q   <= {DIV_W{1'b0}};
+            acc_q   <= {ACC_W{1'b0}};
             bit_q   <= 6'd63;
             mclk_q  <= 1'b0;
             sclk_q  <= 1'b0;
@@ -58,12 +73,12 @@ module i2s_tx #(
             left_q  <= 16'd0;
             right_q <= 16'd0;
         end else begin
-            div_q <= mclk_start ? {DIV_W{1'b0}} : div_q + 1'b1;
+            acc_q <= acc_next;
 
-            // MCLK: 1 in der ersten Hälfte des Takts (bei ungeradem Teiler
-            // ist sie einen Systemtakt kürzer als die zweite).
-            if (mclk_start)                    mclk_q <= 1'b1;
-            else if (div_q == MCLK_DIV / 2 - 1) mclk_q <= 1'b0;
+            // MCLK: 1 in der ersten Hälfte des Takts (auf ganze Systemtakte
+            // abgerundet).
+            if (mclk_start)               mclk_q <= 1'b1;
+            else if (acc_next >= DEN / 2) mclk_q <= 1'b0;
 
             // SCLK wechselt mit jedem MCLK-Takt.
             if (mclk_start) begin

@@ -22,28 +22,36 @@
 //           FPGA_UART_RX  Tastatur-Ersatz: Zeichen aus dem Terminal werden
 //                     auf der C64-Tastatur getippt (ascii_key_typer);
 //                     Ladeblöcke gehen direkt ins RAM (prg_loader)
-//           HDMI      Bild des VIC-II, zeilenverdoppelt (video_scandoubler):
-//                     720 x 576 bei 50 Hz über den HDMI-Sender ADV7513.
-//                     Dazu der Ton des SID als I2S (49,2 kHz, 16 Bit, auf
-//                     beiden Kanälen dasselbe).
-// Takte:  clk_sys = 31,5 MHz aus der PLL, die einzige Domäne. Das ist das
-//         Vierfache des C64-Pixeltakts; die CPU macht alle 32 Takte einen
-//         Schritt (984 kHz, 0,09 % langsamer als ein echter PAL-C64).
-//         HDMI_TX_CLK ist derselbe Takt um 180 Grad verschoben: Die Daten
-//         wechseln mit clk_sys, der Sender übernimmt sie eine halbe Periode
-//         später, mitten im gültigen Bereich.
+//           HDMI      Bild des VIC-II im Normformat 720p50 (1280 x 720 bei
+//                     50 Hz, video_upscaler) über den HDMI-Sender ADV7513:
+//                     jeder Punkt des C64 3 x 3 Bildpunkte groß. Dazu der
+//                     Ton des SID als I2S (48 kHz, 16 Bit, auf beiden
+//                     Kanälen dasselbe).
+// Takte:  clk_sys = 31,5 MHz aus der PLL pll_c64: der Takt des C64. Das ist
+//         das Vierfache des C64-Pixeltakts; die CPU macht alle 32 Takte
+//         einen Schritt (984 kHz, 0,09 % langsamer als ein echter PAL-C64).
+//         clk_vid = 74,25 MHz aus der PLL pll_video: der Pixeltakt von
+//         720p50. In dieser Domäne liegt alles hinter dem Bildspeicher von
+//         video_upscaler (Menüfenster, Testbild, Ausgangsregister); der
+//         Bildspeicher ist der Übergang von clk_sys.
+//         HDMI_TX_CLK ist clk_vid um 270 Grad verschoben: Die Daten wechseln
+//         mit clk_vid, der Sender übernimmt sie eine Dreiviertelperiode
+//         später. Weil die Daten bis zum Pin länger brauchen als der Takt,
+//         liegt die Flanke damit mitten im gültigen Bereich (nachgerechnet
+//         in der .sdc).
 //         Asynchrone Eingänge kommen nur über sync_2ff herein.
-//         Mit HPS gibt es eine zweite Domäne: clk_100 (100 MHz aus der PLL
-//         "pll" an CLOCK2_50) für die Brücken zwischen HPS und FPGA. Von
+//         Mit HPS gibt es eine dritte Domäne: clk_100 (100 MHz aus der PLL
+//         "pll" an CLOCK2_50) für die Brücken zwischen HPS und FPGA.
 //         Zwischen ihr und clk_sys gibt es zwei Übergänge: hps_byte_port,
 //         über den Linux dieselben Bytes schickt wie der PC über
 //         FPGA_UART_RX (dazu die Tasten), und hps_disk_port, über den Linux
-//         dem Laufwerk die Diskette liefert.
+//         dem Laufwerk die Diskette liefert. Zwischen ihr und clk_vid liegt
+//         video_osd (Text des Menüfensters).
 // Ports:  Namen wie im Terasic-Handbuch (Großschreibung nur hier im Top-Level).
 //         KEY und LEDR sind low-aktiv; intern wird alles high-aktiv geführt.
-// IP:     pll_c64 (50 MHz -> 2 x 31,5 MHz, 0 und 180 Grad) und reset_release
-//         sind Intel-IP (quartus/ip/*.ip) und nicht simulierbar — deshalb
-//         bleibt hier nur Verdrahtung.
+// IP:     pll_c64 (50 MHz -> 31,5 MHz), pll_video (50 MHz -> 2 x 74,25 MHz,
+//         0 und 270 Grad) und reset_release sind Intel-IP (quartus/ip/*.ip)
+//         und nicht simulierbar — deshalb bleibt hier nur Verdrahtung.
 //         Mit HPS: qsys_top ist das Platform-Designer-System aus Terasics
 //         Beispiel GHRD (quartus_hps/, siehe README dort). Es enthält das
 //         HPS, dessen Speicher LPDDR4A und die Register an der Brücke; das
@@ -143,29 +151,56 @@ module de25_nano_top #(
 `endif
 
     wire clk_sys;
-    wire clk_sys_180;
     wire pll_locked;
 
+    // Der zweite Ausgang der PLL (31,5 MHz um 180 Grad) war der Takt für den
+    // HDMI-Sender, solange das Bild im Takt des C64 ausgegeben wurde.
     pll_c64 u_pll_c64 (
         .refclk   (CLOCK0_50),
         .rst      (ninit_done),
         .outclk_0 (clk_sys),
-        .outclk_1 (clk_sys_180),
+        .outclk_1 (),
         .locked   (pll_locked)
     );
 
+    wire clk_vid;
+    wire clk_vid_270;
+    wire pll_vid_locked;
+
+    pll_video u_pll_video (
+        .refclk   (CLOCK0_50),
+        .rst      (ninit_done),
+        .outclk_0 (clk_vid),
+        .outclk_1 (clk_vid_270),
+        .locked   (pll_vid_locked)
+    );
+
     // --- Eingänge und Reset -------------------------------------------------
-    // Taster, Schalter, ninit_done und locked in die Taktdomäne holen.
+    // Taster, ninit_done und locked in die Taktdomäne holen.
     wire       key0_q;
-    wire       sw0_q;
     wire       ninit_done_q;
     wire       pll_locked_q;
 
-    sync_2ff #(.WIDTH(4)) u_sync_in (
+    sync_2ff #(.WIDTH(3)) u_sync_in (
         .clk      (clk_sys),
-        .d_async  ({pll_locked, ninit_done, ~KEY[0], SW[0]}),
-        .d_sync_q ({pll_locked_q, ninit_done_q, key0_q, sw0_q})
+        .d_async  ({pll_locked, ninit_done, ~KEY[0]}),
+        .d_sync_q ({pll_locked_q, ninit_done_q, key0_q})
     );
+
+    // Dasselbe für die Bildausgabe (clk_vid). Ihr Reset hängt nicht am
+    // Taster: Bei einem Reset des C64 läuft das Bild weiter, der Fernseher
+    // verliert das Signal nicht.
+    wire       sw0_q;
+    wire       ninit_done_vid_q;
+    wire       pll_vid_locked_q;
+
+    sync_2ff #(.WIDTH(3)) u_sync_in_vid (
+        .clk      (clk_vid),
+        .d_async  ({pll_vid_locked, ninit_done, SW[0]}),
+        .d_sync_q ({pll_vid_locked_q, ninit_done_vid_q, sw0_q})
+    );
+
+    wire rst_vid = ninit_done_vid_q | ~pll_vid_locked_q;
 
     // Reset des C64: Taster, Start des FPGA, PLL — und mit HPS der Wunsch von
     // Linux (Menü). hps_reset_q ist schon in clk_sys synchronisiert.
@@ -381,7 +416,8 @@ module de25_nano_top #(
         .out_q    (audio_avg_q)
     );
 
-    i2s_tx u_i2s_tx (
+    // 31,5 MHz * 512 / 2625 = 6,144 MHz = 128 * 48000: genau 48 kHz.
+    i2s_tx #(.MCLK_NUM(512), .MCLK_DEN(2625)) u_i2s_tx (
         .clk     (clk_sys),
         .rst     (rst),
         .left    (audio_avg_q[17:2]),
@@ -398,13 +434,17 @@ module de25_nano_top #(
     wire        c64_hsync_q;
     wire        c64_vsync_q;
 
-    video_scandoubler u_scandoubler (
+    // 720p50: Fenster von 360 x 240 Punkten des C64, jeder 3 x 3 groß
+    // (Parameter siehe video_upscaler).
+    video_upscaler u_video_upscaler (
         .clk     (clk_sys),
         .rst     (rst),
         .pix_en  (pix_en),
         .color   (vic_color),
         .hblank  (vic_hblank),
         .vblank  (vic_vblank),
+        .clk_vid (clk_vid),
+        .rst_vid (rst_vid),
         .r_q     (c64_rgb_q[23:16]),
         .g_q     (c64_rgb_q[15:8]),
         .b_q     (c64_rgb_q[7:0]),
@@ -413,8 +453,7 @@ module de25_nano_top #(
         .vsync_q (c64_vsync_q)
     );
 
-    // Testbild im selben Raster (1008 x 624, sichtbar 720 x 576), das der
-    // Monitortest bestätigt hat (siehe docs/pinout.md, Bildformat).
+    // Testbild im selben Raster (720p50).
     wire [11:0] bars_x;
     wire [11:0] bars_y;
     wire        bars_de;
@@ -422,11 +461,11 @@ module de25_nano_top #(
     wire        bars_vsync;
 
     video_timing #(
-        .H_ACTIVE (720), .H_FP (72), .H_SYNC (96), .H_BP (120),
-        .V_ACTIVE (576), .V_FP (8),  .V_SYNC (6),  .V_BP (34)
+        .H_ACTIVE (1280), .H_FP (440), .H_SYNC (40), .H_BP (220),
+        .V_ACTIVE (720),  .V_FP (5),   .V_SYNC (5),  .V_BP (20)
     ) u_bars_timing (
-        .clk   (clk_sys),
-        .rst   (rst),
+        .clk   (clk_vid),
+        .rst   (rst_vid),
         .en    (1'b1),
         .x_q   (bars_x),
         .y_q   (bars_y),
@@ -440,8 +479,8 @@ module de25_nano_top #(
     wire        bars_hsync_q;
     wire        bars_vsync_q;
 
-    video_colorbars #(.H_ACTIVE(720), .V_ACTIVE(576)) u_video_colorbars (
-        .clk     (clk_sys),
+    video_colorbars #(.H_ACTIVE(1280), .V_ACTIVE(720)) u_video_colorbars (
+        .clk     (clk_vid),
         .en      (1'b1),
         .x       (bars_x),
         .y       (bars_y),
@@ -471,7 +510,7 @@ module de25_nano_top #(
     reg        hdmi_hsync_q;
     reg        hdmi_vsync_q;
 
-    always @(posedge clk_sys) begin
+    always @(posedge clk_vid) begin
         hdmi_rgb_q   <= sw0_q ? bars_rgb_q   : osd_rgb_q;
         hdmi_de_q    <= sw0_q ? bars_de_q    : osd_de_q;
         hdmi_hsync_q <= sw0_q ? bars_hsync_q : osd_hsync_q;
@@ -479,12 +518,12 @@ module de25_nano_top #(
     end
 
     // Belegung wie in Terasics Demo: D[23:16] Rot, D[15:8] Grün, D[7:0] Blau.
-    // 576p verlangt low-aktive Sync-Impulse.
-    assign HDMI_TX_CLK = clk_sys_180;
+    // 720p verlangt high-aktive Sync-Impulse.
+    assign HDMI_TX_CLK = clk_vid_270;
     assign HDMI_TX_D   = hdmi_rgb_q;
     assign HDMI_TX_DE  = hdmi_de_q;
-    assign HDMI_TX_HS  = ~hdmi_hsync_q;
-    assign HDMI_TX_VS  = ~hdmi_vsync_q;
+    assign HDMI_TX_HS  = hdmi_hsync_q;
+    assign HDMI_TX_VS  = hdmi_vsync_q;
 
     // Konfiguration des HDMI-Senders über I2C. SDA wird nur auf 0 gezogen
     // oder losgelassen; SCL treibt das FPGA wie in Terasics Demo fest.
@@ -625,14 +664,15 @@ module de25_nano_top #(
     // Das Menüfenster teilt sich den Bus mit hps_disk_port: Es hört nur auf
     // Schreibzugriffe im Bereich 0x1000 bis 0x1FFF, den hps_disk_port nicht
     // benutzt (und beim Lesen mit 0 beantwortet).
-    video_osd #(.CHAR_FILE(CHAR_FILE)) u_video_osd (
+    // Lage: mittig in 1280 x 720.
+    video_osd #(.CHAR_FILE(CHAR_FILE), .X0(384), .Y0(232)) u_video_osd (
         .clk_av         (clk_100),
         .rst_av         (rst_av),
         .avs_address    (disk_m0_address[11:2]),
         .avs_write      (disk_m0_write && disk_m0_address[13:12] == 2'b01),
         .avs_writedata  (disk_m0_writedata),
         .avs_byteenable (disk_m0_byteenable),
-        .clk            (clk_sys),
+        .clk            (clk_vid),
         .rgb            (c64_rgb_q),
         .de             (c64_de_q),
         .hsync          (c64_hsync_q),

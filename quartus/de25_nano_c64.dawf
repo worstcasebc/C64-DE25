@@ -65,8 +65,9 @@
 ::drc::add_waiver -rule_id {CDC-50007} -query_string {"Synchronization Nodes" =~ '.*u_hps_disk_port.u_sync_to_drive.meta_q.*'} -stages [list {Timing Signoff}] -tag {handshake} -owner {de25_nano_c64} -description {Pegel aus MOUNT: werden erst zwei Takte nach dem synchronisierten Faehnchen uebernommen, ein Takt Versatz zwischen den Bits ist eingeplant (hps_disk_port.v).}
 # --- TMC-20022: Ausgangsverzoegerung ohne Bezugspin --------------------------
 
-# Die Ausgaenge (LEDs, UART, HDMI, I2C, I2S) sind in der .sdc vom Timing
-# ausgenommen (set_false_path, Begruendung je Gruppe dort). Das
+# Die Ausgaenge fuer LEDs, UART, I2C und I2S sind in der .sdc vom Timing
+# ausgenommen (set_false_path, Begruendung je Gruppe dort); die Bilddaten an
+# den HDMI-Sender gehoeren nicht dazu, sie haben echte Vorgaben. Das
 # set_output_delay mit 0 ns steht nur da, weil eine andere Regel (TMC-20012)
 # fuer jeden Ausgang eine Angabe verlangt; gerechnet wird damit nichts.
 ::drc::add_waiver -rule_id {TMC-20022} -query_string {Location =~ '.*de25_nano_c64.sdc.*'} -stages [list {Timing Signoff}] -tag {platzhalter} -owner {de25_nano_c64} -description {set_output_delay 0 als Platzhalter fuer Ausgaenge, die per set_false_path vom Timing ausgenommen sind (de25_nano_c64.sdc).}

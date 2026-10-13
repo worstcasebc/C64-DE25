@@ -75,10 +75,14 @@ Not there yet:
 | Registers towards Linux, menu window, status LEDs (`rtl/io/hps_byte_port.v`, `rtl/drive/hps_disk_port.v`, `rtl/video/video_osd.v`, `rtl/io/hps_status_led.v`) | written for this project |
 
 The whole C64 runs in a single clock domain at 31.5 MHz. The VIC-II produces a
-PAL picture, which is line-doubled and sent to the board's HDMI transmitter as
-720 x 576 at 50 Hz. The HPS side of the registers runs on its own 100 MHz
-clock; every signal that crosses between the two goes through a synchronizer
-or a handshake.
+PAL picture with a raster no television accepts, so it is written into a
+frame buffer and read out again as standard 720p50 (1280 x 720 at 50 Hz,
+74.25 MHz pixel clock), every C64 pixel 3 x 3 screen pixels large
+(`rtl/video/video_upscaler.v`). The C64 delivers 50.08 pictures per second,
+the standard asks for 50.00; about every twelve seconds one picture is left
+out. The HPS side of the registers runs on its own 100 MHz clock. Every
+signal that crosses between clock domains goes through a synchronizer, a
+handshake or a dual-clock memory.
 
 ## Repository layout
 
