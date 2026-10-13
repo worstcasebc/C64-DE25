@@ -11,7 +11,8 @@
 //                     noch); leuchtet, wenn er läuft; blinkt langsam, wenn
 //                     er ein Problem meldet. Ohne HPS: 1-Hz-Herzschlag aus
 //                     clk_sys — blinkt nur, wenn die PLL läuft.
-//           LEDR[1]   Leuchte des Diskettenlaufwerks 1541
+//           LEDR[1]   Diskettenlaufwerk 1541: blinkt schnell, solange dessen
+//                     Leuchte an ist (es liest oder schreibt)
 //           LEDR[2]   nur mit HPS: Die Diskette hat Änderungen, die noch
 //                     nicht in der Datei stehen — nicht ausschalten
 //           übrige LEDs aus. Zum Fehlersuchen stehen intern Signale bereit,
@@ -177,6 +178,15 @@ module de25_nano_top #(
         .clk   (clk_sys),
         .rst   (rst),
         .led_q (heartbeat_q)
+    );
+
+    // Schneller Blinktakt (8 Hz) für die Anzeige des Laufwerks
+    wire blink_fast_q;
+
+    blink #(.HALF_PERIOD(CLK_HZ / 16)) u_blink_fast (
+        .clk   (clk_sys),
+        .rst   (rst),
+        .led_q (blink_fast_q)
     );
 
     // --- Tastatur-Ersatz und Lader über den UART ----------------------------
@@ -745,13 +755,14 @@ module de25_nano_top #(
 
     // --- LEDs ---------------------------------------------------------------
     // Interne Sicht: 1 = LED an. LED 0 zeigt den Zustand (siehe Kopf), LED 1
-    // ist die Leuchte des Laufwerks, LED 2 warnt vor ungespeicherten
+    // die Leuchte des Laufwerks — blinkend, damit sie neben der dauernd
+    // leuchtenden LED 0 auffällt —, LED 2 warnt vor ungespeicherten
     // Änderungen an der Diskette. status_led und unsaved_led gehören mit HPS
     // zur Domäne clk_100 und gehen ohne Synchronizer hinaus: Sie sind nur
     // fürs Auge.
     // Zum Fehlersuchen bieten sich an: hdmi_ready_q, hdmi_nack_q,
     // key_fifo_full, typer_busy, loader_active, rst.
-    wire [7:0] led = {5'b0, unsaved_led, drive_led, status_led};
+    wire [7:0] led = {5'b0, unsaved_led, drive_led & blink_fast_q, status_led};
 
     assign LEDR = ~led;
 

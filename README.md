@@ -127,7 +127,7 @@ ten minutes and only runs when it is named.
 | `KEY0` | reset |
 | `SW0` | up: colour-bar test picture instead of the C64 picture |
 | `LEDR0` | state. HPS build: blinks fast while the service on Linux is not running (Linux is still booting), lit when it runs, blinks slowly when it reports a problem (no keyboard found, saving failed). Without HPS: 1 Hz heartbeat |
-| `LEDR1` | light of the 1541 disk drive |
+| `LEDR1` | 1541 disk drive: blinks fast while it reads or writes |
 | `LEDR2` | HPS build only: the disk has changes that are not in the file yet — do not power off |
 
 Picture and sound come out of the HDMI connector.
