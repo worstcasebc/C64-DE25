@@ -79,6 +79,12 @@ Die `.sof` aus dem Bau enthält den Bootloader des HPS noch nicht.
 `output_files\de25_nano_c64_hps_boot.sof`. Diese Datei per JTAG laden (SW5 im
 JTAG-Modus); das QSPI-Flash bleibt unberührt.
 
+Soll das Design nach dem Einschalten von selbst starten, kommt es ins
+QSPI-Flash: `sof_to_jic.bat` macht aus der `_boot.sof` eine `.jic`,
+`flash_program.bat` schreibt sie (SW5 im AS-Modus). Die Schritte stehen in
+[INSTALL.md](../INSTALL.md), Abschnitt E. Auf dem Board bestätigt: Es startet
+nach dem Einschalten von selbst.
+
 ## Register an der Brücke (Lightweight HPS-to-FPGA)
 
 Basis aus Sicht von Linux: `0x2000_0000` (auf dem Board bestätigt).

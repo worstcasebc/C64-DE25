@@ -102,8 +102,9 @@ In short:
   | `quartus/de25_nano_c64.qpf` | the C64 alone | quick builds, no Linux needed |
   | `quartus_hps/de25_nano_c64_hps.qpf` | C64 and HPS | everything that needs Linux |
 
-- The design is loaded over JTAG and is gone after a power cycle. For the HPS
-  project, Linux boots from the microSD card with Terasic's card image.
+- Loaded over JTAG, the design is gone after a power cycle; written into the
+  board's QSPI flash, it starts at power-on (HPS project). Linux boots from
+  the microSD card with Terasic's card image.
 
 ### Simulation
 

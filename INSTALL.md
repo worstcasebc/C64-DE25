@@ -428,6 +428,47 @@ to a file the service puts a copy `<name>.bak` next to it, once. The USB
 stick is mounted read-only and made writable only for the moment of writing.
 `.g64` images are write-protected.
 
+## E. Starting without the PC
+
+Loaded over JTAG, the design is gone after a power cycle. Written into the
+board's QSPI flash, it is loaded at every power-on; together with the service
+from D6 the board then works as a C64 without a PC. This is for the HPS
+project. The procedure is Terasic's (Demonstration Manual, chapter 4), with
+the file names of this project.
+
+Writing the flash replaces what is in it — from the factory, Terasic's
+start-up design. That is not a risk for the board: loading over JTAG keeps
+working whatever the flash contains, and the factory content can be written
+back (see below).
+
+1. Build the design and add the bootloader (C5, C6).
+2. Convert it into a flash file:
+
+   ```
+   quartus_hps\sof_to_jic.bat
+   ```
+
+   This creates `quartus_hps\output_files\de25_nano_c64_hps.jic`.
+3. Power the board off and set SW5 to AS mode: SW5.1 OFF, SW5.2 ON,
+   SW5.3 ON (MSEL[2:0] = 001; this is the setting the board is shipped
+   with). Power it on, with the USB cable of the USB-Blaster connected.
+4. Write the flash:
+
+   ```
+   quartus_hps\flash_program.bat
+   ```
+
+   It writes and verifies; this takes a few minutes.
+5. Power the board off and on. The design starts from the flash, and Linux
+   boots from the microSD card as before.
+
+SW5 stays in AS mode from now on. To go back to the factory content, run
+Terasic's `flash_program.bat` from the resource package
+(`Demonstration\SoC_FPGA\GHRD\output_files\program_qspi_flash`), again in AS
+mode.
+
+After a new build, repeat steps 1, 2 and 4.
+
 ## After changes
 
 | What changed | Do again |
@@ -438,4 +479,4 @@ stick is mounted read-only and made writable only for the moment of writing.
 | Windows was restarted | C2 |
 | `fetch_ghrd.py` was run again | C3 and C4 |
 | a script under `sw/py` that runs on the board | D3, then restart the service that uses it (`sudo systemctl restart c64d` or `c64-keys`) |
-| the board was powered off | D1 |
+| the board was powered off | D1 — unless the design is in the flash (part E) |
