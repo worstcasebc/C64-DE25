@@ -232,12 +232,14 @@ Known messages that are no problem:
 - Warning 24541 about `drive_num` in `c1541_multi.sv`.
 - "Node HPS_… is assigned to location or region, but does not exist in
   design" — the HPS pins are hard-wired.
-- The Design Assistant reports no violations of high severity. Four kinds of
+- The Design Assistant reports no violations of high severity. Five kinds of
   findings are waived, each with its reason, in `quartus/de25_nano_c64.dawf`
-  (69 entries: the crossings between the HPS and the C64, and placeholder
+  (70 entries: the crossings between the HPS and the C64, and placeholder
   output delays). What remains is of medium or low severity and not waived:
-  RDC-50003 (Terasic's system), TMC-20025 (the JTAG clock group in the
-  `.sdc` covers no path) and LNT-30010 (a style hint).
+  RDC-50003 (Terasic's system), TMC-20025 and LNT-30010 (a style hint).
+  TMC-20025 claims that the JTAG clock group in the `.sdc` covers no path.
+  Do not remove that line: without it about 60 paths between the JTAG clock
+  and the 100 MHz clock violate timing. Why the rule reports it is unclear.
 
 ### C6. Add the bootloader
 
@@ -467,7 +469,9 @@ back (see below).
 5. Power the board off and on. The design starts from the flash, and Linux
    boots from the microSD card as before.
 
-SW5 stays in AS mode from now on. To go back to the factory content, run
+SW5 stays in AS mode from now on. Whether a `.sof` can still be loaded over
+JTAG in this position has not been tried; so far every new build went into
+the flash. To go back to the factory content, run
 Terasic's `flash_program.bat` from the resource package
 (`Demonstration\SoC_FPGA\GHRD\output_files\program_qspi_flash`), again in AS
 mode.

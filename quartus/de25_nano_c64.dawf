@@ -22,7 +22,9 @@
 #
 # Bewusst NICHT ausgenommen (niedrige oder mittlere Stufe, nicht von hier):
 #   RDC-50003  mehrere Reset-Synchronizer in clk_100 -- Terasics System
-#   TMC-20025  set_clock_groups fuer den JTAG-Takt deckt keinen Pfad ab
+#   TMC-20025  die Taktgruppe fuer den JTAG-Takt decke keinen Pfad ab --
+#              stimmt so nicht: ohne sie verletzen Pfade das Timing (siehe
+#              Kommentar in der .sdc); die Meldung ist ungeklaert
 #   LNT-30010  ein Signal treibt Reset und Taktfreigabe -- Stilhinweis,
 #              ueberwiegend in den Fremd-Cores
 
@@ -53,6 +55,14 @@
 # echten Tastatur.
 ::drc::add_waiver -rule_id {CDC-50007} -query_string {"Synchronization Nodes" =~ '.*u_hps_byte_port.u_sync_keys.meta_q.*'} -stages [list {Timing Signoff}] -tag {unabhaengige_bits} -owner {de25_nano_c64} -description {Tasten und Joysticks: jedes Bit gilt fuer sich, ein Takt Versatz zwischen Bits ist ohne Bedeutung (hps_byte_port.v).}
 
+# hps_disk_port: die Pegel aus dem Register MOUNT (Laufwerk ein, Format,
+# Schreibschutz, Diskette vorhanden). Sie laufen bitweise durch einen
+# sync_2ff, zusammen mit einem Faehnchen, das bei jedem Schreiben wechselt.
+# Uebernommen werden sie nicht sofort, sondern erst zwei Takte nachdem das
+# Faehnchen angekommen ist (mount_cnt_q == 3) -- genau fuer den Fall, dass
+# ein Bit einen Takt spaeter kommt als ein anderes. Geprueft in
+# tb/tb_hps_disk_port.v (Impuls erst, wenn der Pegel steht).
+::drc::add_waiver -rule_id {CDC-50007} -query_string {"Synchronization Nodes" =~ '.*u_hps_disk_port.u_sync_to_drive.meta_q.*'} -stages [list {Timing Signoff}] -tag {handshake} -owner {de25_nano_c64} -description {Pegel aus MOUNT: werden erst zwei Takte nach dem synchronisierten Faehnchen uebernommen, ein Takt Versatz zwischen den Bits ist eingeplant (hps_disk_port.v).}
 # --- TMC-20022: Ausgangsverzoegerung ohne Bezugspin --------------------------
 
 # Die Ausgaenge (LEDs, UART, HDMI, I2C, I2S) sind in der .sdc vom Timing
