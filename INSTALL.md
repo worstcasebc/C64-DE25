@@ -232,8 +232,12 @@ Known messages that are no problem:
 - Warning 24541 about `drive_num` in `c1541_multi.sv`.
 - "Node HPS_… is assigned to location or region, but does not exist in
   design" — the HPS pins are hard-wired.
-- The Design Assistant reports the rules CDC-50001, CDC-50002 and CDC-50007
-  for the crossings between the HPS and the C64 and TMC-20022 for I/O pins.
+- The Design Assistant reports no violations of high severity. Four kinds of
+  findings are waived, each with its reason, in `quartus/de25_nano_c64.dawf`
+  (69 entries: the crossings between the HPS and the C64, and placeholder
+  output delays). What remains is of medium or low severity and not waived:
+  RDC-50003 (Terasic's system), TMC-20025 (the JTAG clock group in the
+  `.sdc` covers no path) and LNT-30010 (a style hint).
 
 ### C6. Add the bootloader
 

@@ -182,6 +182,8 @@ set_global_assignment -name IP_FILE ../quartus/ip/pll_c64.ip
 # Die eigene .sdc muss nach der PLL-IP stehen: Sie benutzt deren Takte, und
 # Quartus liest die Dateien in dieser Reihenfolge.
 set_global_assignment -name SDC_FILE ../quartus/de25_nano_c64.sdc
+# Begruendete Ausnahmen fuer den Design Assistant
+set_global_assignment -name DESIGN_ASSISTANT_WAIVER_FILE ../quartus/de25_nano_c64.dawf
 
 # --- HPS: Schalter im Top-Level, Einstellungen und Bausteine aus Terasics GHRD ---
 set_global_assignment -name VERILOG_MACRO "ENABLE_HPS=1"

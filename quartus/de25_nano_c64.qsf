@@ -179,6 +179,8 @@ set_global_assignment -name IP_FILE ip/pll_c64.ip
 # Die eigene .sdc muss nach der PLL-IP stehen: Sie benutzt deren Takte, und
 # Quartus liest die Dateien in dieser Reihenfolge.
 set_global_assignment -name SDC_FILE de25_nano_c64.sdc
+# Begruendete Ausnahmen fuer den Design Assistant
+set_global_assignment -name DESIGN_ASSISTANT_WAIVER_FILE de25_nano_c64.dawf
 set_global_assignment -name ENABLE_SIGNALTAP OFF
 set_global_assignment -name USE_SIGNALTAP_FILE de25_nano_c64.stp
 set_global_assignment -name SIGNALTAP_FILE de25_nano_c64.stp

@@ -1,0 +1,62 @@
+# de25_nano_c64.dawf -- Ausnahmen (Waiver) fuer den Design Assistant
+#
+# Der Design Assistant prueft das fertige Design gegen feste Regeln. Einige
+# Meldungen betreffen Stellen, die hier mit Absicht so gebaut sind. Eine
+# Ausnahme nimmt genau diese Stellen aus der Meldung heraus und haelt fest,
+# warum -- wie ein Vermerk im Pruefprotokoll: "gesehen, ist so gewollt".
+# Alles andere meldet die Regel weiterhin; ein neuer, ungewollter Uebergang
+# zwischen zwei Takten faellt also weiter auf.
+#
+# Beide Projekte (quartus/ und quartus_hps/) lesen diese Datei
+# (DESIGN_ASSISTANT_WAIVER_FILE in der .qsf). Im Projekt ohne HPS gibt es die
+# Stellen der CDC-Regeln nicht; die Ausnahmen dafuer greifen dort ins Leere.
+#
+# Schreibweise (an einem Probeprojekt ausprobiert, Quartus Pro 26.1):
+#   -rule_id       Nummer der Regel
+#   -query_string  welche Zeilen der Meldung gemeint sind: Spaltenname aus
+#                  dem Bericht, =~ und ein regulaerer Ausdruck (.* = beliebig)
+#   -stages        Pruefstufe; ohne diese Angabe greift die Ausnahme nicht.
+#                  Die Regeln hier werden in "Timing Signoff" geprueft
+#                  (Bericht output_files/<Projekt>.tq.drc.signoff.rpt).
+# Keine Umlaute, und jeder Befehl in einer Zeile: So war es in der Probe.
+#
+# Bewusst NICHT ausgenommen (niedrige oder mittlere Stufe, nicht von hier):
+#   RDC-50003  mehrere Reset-Synchronizer in clk_100 -- Terasics System
+#   TMC-20025  set_clock_groups fuer den JTAG-Takt deckt keinen Pfad ab
+#   LNT-30010  ein Signal treibt Reset und Taktfreigabe -- Stilhinweis,
+#              ueberwiegend in den Fremd-Cores
+
+# --- CDC-50001: einzelne Bits ohne Synchronizer zwischen zwei Takten --------
+
+# hps_byte_port: das Byte von Linux an den C64. Es wird nach dem
+# Briefkasten-Prinzip uebergeben: Die C64-Seite liest data_av_q erst, wenn
+# das Faehnchen req_tgl_q durch einen sync_2ff gekommen ist. Dann steht das
+# Byte seit mindestens zwei Takten still und bleibt stehen, bis die C64-Seite
+# quittiert hat. Geprueft in tb/tb_hps_byte_port.v.
+::drc::add_waiver -rule_id {CDC-50001} -query_string {To =~ '.*u_hps_byte_port.data_q.*'} -stages [list {Timing Signoff}] -tag {handshake} -owner {de25_nano_c64} -description {Byte von Linux an den C64: wird erst gelesen, nachdem das Faehnchen req_tgl_q synchronisiert ist; die Daten stehen dann still (hps_byte_port.v).}
+
+# hps_disk_port: Block und Anzahl einer Anforderung des Laufwerks im
+# Register REQUEST. Linux wertet sie erst aus, wenn die Anforderung selbst
+# (sd_rd bzw. wr_ready_q) durch einen sync_2ff sichtbar geworden ist; das
+# Laufwerk aendert sie nicht, solange die Anforderung ansteht. Dazu gehoert
+# gcr_mode, das die Anzahl mitbestimmt und sich nur beim Einlegen aendert.
+# Geprueft in tb/tb_hps_disk_port.v.
+::drc::add_waiver -rule_id {CDC-50001} -query_string {To =~ '.*u_hps_disk_port.reg_data_q.*'} -stages [list {Timing Signoff}] -tag {handshake} -owner {de25_nano_c64} -description {Block und Anzahl einer Anforderung des Laufwerks: stehen still, sobald die Anforderung synchronisiert sichtbar ist (hps_disk_port.v).}
+
+# --- CDC-50007: Bus aus mehreren Synchronizern ohne Zeitvorgabe -------------
+
+# hps_byte_port: Tasten, RESTORE, Joysticks und Reset-Wunsch laufen bitweise
+# durch einen sync_2ff. Die Regel verlangt eine Vorgabe, wie weit die Bits
+# zeitlich auseinanderliegen duerfen, weil ein Bus sonst kurz einen Wert
+# zeigen kann, den es nie gab. Hier ist jedes Bit eine eigene Taste; kommt
+# eine einen Takt (32 ns) frueher an als die andere, ist das wie bei einer
+# echten Tastatur.
+::drc::add_waiver -rule_id {CDC-50007} -query_string {"Synchronization Nodes" =~ '.*u_hps_byte_port.u_sync_keys.meta_q.*'} -stages [list {Timing Signoff}] -tag {unabhaengige_bits} -owner {de25_nano_c64} -description {Tasten und Joysticks: jedes Bit gilt fuer sich, ein Takt Versatz zwischen Bits ist ohne Bedeutung (hps_byte_port.v).}
+
+# --- TMC-20022: Ausgangsverzoegerung ohne Bezugspin --------------------------
+
+# Die Ausgaenge (LEDs, UART, HDMI, I2C, I2S) sind in der .sdc vom Timing
+# ausgenommen (set_false_path, Begruendung je Gruppe dort). Das
+# set_output_delay mit 0 ns steht nur da, weil eine andere Regel (TMC-20012)
+# fuer jeden Ausgang eine Angabe verlangt; gerechnet wird damit nichts.
+::drc::add_waiver -rule_id {TMC-20022} -query_string {Location =~ '.*de25_nano_c64.sdc.*'} -stages [list {Timing Signoff}] -tag {platzhalter} -owner {de25_nano_c64} -description {set_output_delay 0 als Platzhalter fuer Ausgaenge, die per set_false_path vom Timing ausgenommen sind (de25_nano_c64.sdc).}
