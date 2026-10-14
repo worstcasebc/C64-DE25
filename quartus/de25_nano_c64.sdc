@@ -84,11 +84,13 @@ set_output_delay -clock $clk_sys 0 [get_ports {LEDR[*] FPGA_UART_TX HDMI_I2C_SCL
 # JTAG-Takt: existiert nur, wenn Signal Tap (oder anderes JTAG-Debug) im
 # Design steckt. Er kommt vom USB-Blaster und hat keinen Bezug zu clk_sys,
 # deshalb als eigene, asynchrone Taktgruppe.
-# Nicht entfernen, auch wenn der Design Assistant im Projekt mit HPS meldet,
-# die Taktgruppe decke keinen Pfad ab (TMC-20025): Ohne sie verletzen dort
-# rund 60 Pfade zwischen JTAG-Takt und clk_100 das Timing (Hold und Removal,
-# ausprobiert am 13.10.2026). Warum die Regel sie trotzdem als wirkungslos
-# einstuft, ist ungeklaert.
+# Im Projekt mit HPS trennt die Gruppe 75 Pfade zwischen JTAG-Takt und
+# clk_100 (JTAG-Master aus Terasics System); ohne sie verletzen sie das
+# Timing (Hold und Removal). Die Kurzform mit nur einer Gruppe heisst "zu
+# allen anderen Takten asynchron" und erfasst auch Takte, die erst spaeter
+# angelegt werden. Der Design Assistant bewertet sie aber mit den Takten, die
+# beim Lesen dieser Datei schon da sind; deshalb steht sie in
+# quartus_hps/de25_nano_c64_hps.qsf hinter allen IP-Dateien (sonst TMC-20025).
 if {[get_collection_size [get_ports -nowarn altera_reserved_tck]] > 0} {
     create_clock -name altera_reserved_tck -period 100.000 [get_ports altera_reserved_tck]
     set_clock_groups -asynchronous -group {altera_reserved_tck}

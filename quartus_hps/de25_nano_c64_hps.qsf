@@ -182,9 +182,7 @@ set_global_assignment -name PWRMGT_VOLTAGE_OUTPUT_FORMAT "LINEAR FORMAT"
 set_global_assignment -name PWRMGT_LINEAR_FORMAT_N "-12"
 set_global_assignment -name IP_FILE ../quartus/ip/pll_c64.ip
 set_global_assignment -name IP_FILE ../quartus/ip/pll_video.ip
-# Die eigene .sdc muss nach der PLL-IP stehen: Sie benutzt deren Takte, und
-# Quartus liest die Dateien in dieser Reihenfolge.
-set_global_assignment -name SDC_FILE ../quartus/de25_nano_c64.sdc
+# Die eigene .sdc steht am Ende der Datei (siehe dort).
 # Begruendete Ausnahmen fuer den Design Assistant
 set_global_assignment -name DESIGN_ASSISTANT_WAIVER_FILE ../quartus/de25_nano_c64.dawf
 
@@ -428,4 +426,12 @@ set_location_assignment PIN_BP74 -to HPS_USB_DATA[7]
 set_location_assignment PIN_AY67 -to HPS_USB_DIR
 set_location_assignment PIN_BA75 -to HPS_USB_NXT
 set_location_assignment PIN_BC67 -to HPS_USB_STP
+# --- Eigene .sdc: als letzte ------------------------------------------------
+# Quartus liest die .sdc-Dateien in der Reihenfolge dieser Datei. Die eigene
+# benutzt die Takte aller PLLs, auch den clk_100 der HPS-PLL (ip/pll.ip), und
+# muss deshalb hinter allen IP-Dateien stehen. Stand sie davor, wirkte die
+# Taktgruppe fuer den JTAG-Takt zwar, der Design Assistant meldete sie aber
+# als wirkungslos (TMC-20025): Er bewertet sie mit den Takten, die beim
+# Lesen schon bekannt sind, und clk_100 war es da noch nicht.
+set_global_assignment -name SDC_FILE ../quartus/de25_nano_c64.sdc
 set_global_assignment -name LAST_QUARTUS_VERSION "26.1.0 Pro Edition"

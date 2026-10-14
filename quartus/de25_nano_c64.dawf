@@ -22,9 +22,6 @@
 #
 # Bewusst NICHT ausgenommen (niedrige oder mittlere Stufe, nicht von hier):
 #   RDC-50003  mehrere Reset-Synchronizer in clk_100 -- Terasics System
-#   TMC-20025  die Taktgruppe fuer den JTAG-Takt decke keinen Pfad ab --
-#              stimmt so nicht: ohne sie verletzen Pfade das Timing (siehe
-#              Kommentar in der .sdc); die Meldung ist ungeklaert
 #   LNT-30010  ein Signal treibt Reset und Taktfreigabe -- Stilhinweis,
 #              ueberwiegend in den Fremd-Cores
 
@@ -71,3 +68,25 @@
 # set_output_delay mit 0 ns steht nur da, weil eine andere Regel (TMC-20012)
 # fuer jeden Ausgang eine Angabe verlangt; gerechnet wird damit nichts.
 ::drc::add_waiver -rule_id {TMC-20022} -query_string {Location =~ '.*de25_nano_c64.sdc.*'} -stages [list {Timing Signoff}] -tag {platzhalter} -owner {de25_nano_c64} -description {set_output_delay 0 als Platzhalter fuer Ausgaenge, die per set_false_path vom Timing ausgenommen sind (de25_nano_c64.sdc).}
+
+# --- FLP-10000: RAM-Block kaum genutzt ----------------------------------------
+
+# Die Regel meldet M20K-Bloecke, in denen nur ein kleiner Teil belegt ist
+# (Stichwort Platzverschwendung). Hier ist das jeweils so gewollt oder
+# nicht von hier zu aendern.
+
+# JTAG-Master aus Terasics System (hps_m, fpga_m, hps_f2sdram): je ein kleiner
+# FIFO von 512 Bit. Intel-IP, nicht von hier.
+::drc::add_waiver -rule_id {FLP-10000} -query_string {"Logical RAM Name" =~ '.*altera_jtag_avalon_master_inst.fifo.*'} -stages [list {Timing Signoff}] -tag {fremd} -owner {de25_nano_c64} -description {FIFO der JTAG-Master aus Terasics System (Intel-IP), nicht von hier.}
+
+# VIC-II aus fpga64 (rtl/video/vendor/fpga64): charStore, 768 Bit. Fremdcode,
+# Aenderungen nur ueber Patch -- fuer einen Block lohnt das nicht.
+::drc::add_waiver -rule_id {FLP-10000} -query_string {"Logical RAM Name" =~ '.*u_vic.charStore.*'} -stages [list {Timing Signoff}] -tag {fremd} -owner {de25_nano_c64} -description {charStore im VIC-II aus fpga64 (Fremdcode), nicht von hier.}
+
+# video_upscaler: Jeder Bildspeicher hat 43200 Worte (360 x 240 Bildpunkte,
+# zwei je Wort), ein M20K fasst 2048 davon. Das ergibt 21 volle Bloecke und
+# einen 22., in dem nur 192 Worte liegen. Ihn zu sparen hiesse, das
+# Bildfenster zu verkleinern oder die Bildpunkte anders zu packen (5 je
+# 20-Bit-Wort spart 5 Bloecke je Speicher, aber mit Zaehlern bis 5 auf beiden
+# Seiten); beides lohnt erst, wenn die Bloecke knapp werden.
+::drc::add_waiver -rule_id {FLP-10000} -query_string {"Logical RAM Name" =~ '.*u_video_upscaler.u_frame_.*'} -stages [list {Timing Signoff}] -tag {rest} -owner {de25_nano_c64} -description {Letzter, nur teilweise gefuellter Block der Bildspeicher im video_upscaler (43200 Worte = 21 volle Bloecke und ein Rest).}
