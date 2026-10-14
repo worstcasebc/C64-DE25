@@ -61,6 +61,11 @@ Not there yet:
 - PAL only.
 - Files get onto the board by USB stick or over the serial console; there is
   no network transfer.
+- Formatting a `.D64` with a new ID (`N:NAME,ID`) does not work; the short
+  format `N:NAME` does.
+
+Planned work is tracked in the
+[GitHub issues](https://github.com/worstcasebc/C64-DE25/issues).
 
 ### What is inside
 
