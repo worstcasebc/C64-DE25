@@ -88,9 +88,15 @@ module video_osd #(
         else if (de_old_q && !de) y_q <= y_q + 1'b1;
     end
 
+    // X0 und Y0 als 11-Bit-Werte: So rechnet die Subtraktion unten in der
+    // Breite von x_q und y_q, statt in den 32 Bit eines Parameters (sonst
+    // warnt die Synthese, dass das Ergebnis abgeschnitten wird).
+    localparam [10:0] X0_W = X0;
+    localparam [10:0] Y0_W = Y0;
+
     wire        in_win = de && x_q >= X0 && x_q < X0 + WIN_W && y_q >= Y0 && y_q < Y0 + WIN_H;
-    wire [10:0] wx     = x_q - X0;      // Lage im Fenster
-    wire [10:0] wy     = y_q - Y0;
+    wire [10:0] wx     = x_q - X0_W;    // Lage im Fenster
+    wire [10:0] wy     = y_q - Y0_W;
 
     // --- Stufe 1: Zeichen aus dem Textspeicher ------------------------------
     wire [7:0] code;
