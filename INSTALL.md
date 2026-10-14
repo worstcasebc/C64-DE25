@@ -297,15 +297,21 @@ These files go into `/home/terasic` on the board:
 | `sw/py/c64_keys.py` | USB keyboard |
 | `sw/py/c64-keys.service` | starting the keyboard at boot |
 | `sw/py/c64_disk.py` | inserting a disk |
-| `sw/py/c64d.py`, `sw/py/c64d.service` | keyboard, disk drive and menu in one service; needs `c64_keys.py`, `c64_disk.py` and `c64_blocks.py` next to it |
+| `sw/py/c64d.py`, `sw/py/c64d.service` | keyboard, disk drive and menu in one service; needs `c64_keys.py`, `c64_disk.py`, `c64_blocks.py` and `c64_pads.py` next to it |
+| `sw/py/c64_pads.py`, `sw/py/99-c64-gamepad.rules` | USB gamepads (see D6) |
 | your `.prg`, `.d64` and `.g64` files | |
 
-Over the network, if the board is connected and the card image runs an SSH
-server *(not confirmed)*:
+Over the network (the card image runs an SSH server; for WLAN see D7):
 
 ```
-scp sw/py/c64_hps.py sw/py/c64_blocks.py sw/py/c64_keys.py sw/py/c64-keys.service sw/py/c64_disk.py terasic@<address of the board>:~
+python sw/py/to_board.py <address of the board>
 ```
+
+copies all scripts the service needs into `/home/terasic` and restarts
+`c64d` (`sudo` asks for the password on the board; `--no-restart` only
+copies). With an SSH key on the board, copying needs no password; how to
+add one is at the top of `to_board.py`. Single files go with
+`scp <file> terasic@<address of the board>:~`.
 
 Without a network, through the Linux console:
 
@@ -393,13 +399,31 @@ works when a game asks for the next disk.
    | Key | In the menu |
    |-----|-------------|
    | F12 | open and close the menu |
+   | arrow left/right | switch tab: DISK, SETTINGS, RESET |
    | arrow up/down, Page Up/Down | choose an entry |
-   | Enter | insert the `.d64`/`.g64`, or load the `.prg` (a BASIC program is started with RUN); on the entry `<JOYSTICK: PORT n>` switch the joystick to the other port; on `<C64 ZURUECKSETZEN>` reset the C64 |
+   | Enter | DISK: insert the `.d64`/`.g64`, or load the `.prg` (a BASIC program is started with RUN), or take the disk out; SETTINGS: switch the numeric keypad to the other joystick port; RESET: reset the C64 |
    | Esc | close the menu |
+
+   F12 always opens on DISK, so that Enter never resets the C64 by accident.
 
    Outside the menu the numeric keypad is a joystick:
    8/2/4/6 are the directions, 7/9/1/3 the diagonals, 0 and right Ctrl are
    fire. Most games expect it at port 2, which is the preset.
+
+   USB gamepads are joysticks too: the first on port 2, the second on
+   port 1 (ordered by USB port). D-pad = directions, action buttons = fire,
+   Start = RUN/STOP, Select = Commodore key. Many cheap pads announce
+   500 mA; at a hub without its own power supply, such as the one in a
+   keyboard, Linux then rejects them ("insufficient available bus power" in
+   `dmesg`). The udev rule lets them in:
+
+   ```
+   sudo cp 99-c64-gamepad.rules /etc/udev/rules.d/
+   sudo udevadm control --reload
+   ```
+
+   then unplug the pads and plug them in again. For another pad model, add
+   its `idVendor`/`idProduct` (from `lsusb`) to the rule.
 
 4. Start it at every boot:
 
@@ -434,6 +458,33 @@ what the C64 writes is in the file one second later. Before the first change
 to a file the service puts a copy `<name>.bak` next to it, once. The USB
 stick is mounted read-only and made writable only for the moment of writing.
 `.g64` images are write-protected.
+
+### D7. WLAN (optional)
+
+Tried with a USB stick with the Ralink RT5370 chip (`148f:5370`); the card
+image has its driver (`rt2800usb`) and firmware. Realtek WLAN sticks are not
+supported by the image. A USB-to-Ethernet adapter (`r8152`) works as well.
+The RT5370 only knows 2.4 GHz.
+
+1. Change the password of `terasic` first (the image ships with a known
+   one): `passwd`.
+2. Plug the stick into a port with enough power (the dock or the board's
+   hub, not the keyboard's hub); `nmcli dev` then lists a `wifi` device
+   (named after its MAC address, e.g. `wlx8c882b0002bf`).
+3. Connect; `--ask` asks for the WLAN key, so it stays out of the shell
+   history:
+
+   ```
+   sudo nmcli --ask device wifi connect "<SSID>"
+   nmcli -t -f IP4.ADDRESS dev show <device>
+   ```
+
+   NetworkManager keeps the connection and brings it up at every boot. A
+   typing error in the key ends with "Secrets were required, but not
+   provided" (in `journalctl -u NetworkManager`: "4-Way Handshake failed");
+   then `sudo nmcli connection delete "<SSID>"` and connect again.
+4. From the PC: `ssh terasic@<address>`. A fixed address (a DHCP
+   reservation in the router) saves looking it up each time.
 
 ## E. Starting without the PC
 

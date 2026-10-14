@@ -56,12 +56,12 @@ and the programs come from a PC over the UART.
 
 Not there yet:
 
-- USB gamepads or joysticks (only the numeric keypad).
 - `.G64` images are prepared but untried and stay write-protected.
 - No tape, no cartridges, a single drive (device 8).
 - PAL only.
-- Files get onto the board by USB stick or over the serial console; there is
-  no network transfer.
+- Disk images and programs get onto the board by USB stick; the scripts can
+  also be copied over the network (`sw/py/to_board.py`, WLAN or Ethernet,
+  see INSTALL.md D7).
 - Formatting a `.D64` with a new ID (`N:NAME,ID`) does not work; the short
   format `N:NAME` does.
 
