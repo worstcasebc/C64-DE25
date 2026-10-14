@@ -224,7 +224,9 @@ diagonals, 0 and right Ctrl are fire. The menu sets the port under SETTINGS
 USB gamepads work as joysticks too: the first one on port 2, the second on
 port 1 ("first" is the one on the lower USB port number, so the order stays
 the same after a restart). The D-pad gives the directions, the action
-buttons are fire, Start is RUN/STOP and Select is the Commodore key. Pads can be plugged in and
+buttons are fire, Start is RUN/STOP and Select is the Commodore key. On the
+pad 081f:e401 only A is fire; X is up (jump in many games), B is down and Y
+is the space bar. Pads can be plugged in and
 out while the C64 runs; SETTINGS in the menu shows which pad is on which
 port. Tested with the gamepad 081f:e401 (SNES style). Many cheap pads
 announce 500 mA although they need almost nothing, and a hub without its

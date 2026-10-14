@@ -416,7 +416,8 @@ works when a game asks for the next disk.
 
    USB gamepads are joysticks too: the first on port 2, the second on
    port 1 (ordered by USB port). D-pad = directions, action buttons = fire,
-   Start = RUN/STOP, Select = Commodore key. Many cheap pads announce
+   Start = RUN/STOP, Select = Commodore key; on the pad 081f:e401 A = fire,
+   X = up (jump), B = down, Y = space bar. Many cheap pads announce
    500 mA; at a hub without its own power supply, such as the one in a
    keyboard, Linux then rejects them ("insufficient available bus power" in
    `dmesg`). The udev rule lets them in:

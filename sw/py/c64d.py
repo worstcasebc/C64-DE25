@@ -36,7 +36,8 @@ USB-Gamepads (c64_pads.py) sind ebenfalls Joysticks: das erste an Port 2,
 das zweite an Port 1. "Erstes" ist das am USB-Anschluss mit der kleineren
 Nummer, damit die Zuordnung nach jedem Neustart gleich bleibt. Steuerkreuz =
 Richtungen, die Aktionsknöpfe = Feuer, Start = RUN/STOP, Select = C=
-(Commodore-Taste). Pads lassen sich im Betrieb
+(Commodore-Taste); beim Pad 081f:e401 ist nur A Feuer, X hoch (Springen),
+B runter, Y die Leertaste. Pads lassen sich im Betrieb
 anstecken und abziehen. Hängen Pad und Ziffernblock am selben Port, gilt,
 was einer von beiden drückt. Unter SETTINGS steht, welches Pad wo steckt.
 

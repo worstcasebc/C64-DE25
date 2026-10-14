@@ -4,16 +4,20 @@ Läuft auf dem Board unter Linux. Ein Pad meldet sich bei Linux als
 Eingabegerät mit zwei Achsen (X, Y) und Knöpfen. Ausprobiert mit dem Modell
 081f:e401 ("USB gamepad", SNES-Form): Das Steuerkreuz sind die Achsen
 X und Y mit 0 (links/hoch), 127 (Mitte) und 255 (rechts/runter); die vier
-Aktionsknöpfe sind 0x120..0x123, Select und Start 0x128/0x129.
+Aktionsknöpfe X, A, B, Y sind 0x120..0x123, Select und Start 0x128/0x129.
 
 Ein Joystick des C64 kennt nur fünf Schalter: hoch, runter, links, rechts,
 Feuer. Das Pad wird darauf abgebildet wie ein Steuerkreuz auf einen
 Schalter-Joystick: Steht eine Achse im unteren Viertel ihres Bereichs, ist
 "links" bzw. "hoch" gedrückt, im oberen Viertel "rechts" bzw. "runter".
-Das passt auch für Analog-Sticks. Jeder Joystick- oder Gamepad-Knopf außer
-Select und Start ist Feuer. Start ist die Taste RUN/STOP, Select die
+Das passt auch für Analog-Sticks. Start ist die Taste RUN/STOP, Select die
 Commodore-Taste (C=) — sie zählen wie Esc und Strg links auf der
 USB-Tastatur (siehe c64_keys.py), gleich an welchem Port das Pad steckt.
+
+Beim Modell 081f:e401 haben die Aktionsknöpfe eigene Aufgaben (MODELS):
+A ist Feuer, X "hoch" (in vielen Spielen Springen), B "runter", Y die
+Leertaste. Bei anderen Pads ist jeder Knopf außer Select und Start Feuer —
+dort hieße 0x120 nicht unbedingt X (bei einem Flugknüppel ist es der Abzug).
 
 Welches Pad an welchem Port des C64 steckt, entscheidet c64d.py: Die Pads
 werden nach ihrem USB-Anschluss sortiert (Phys in /proc/bus/input/devices),
@@ -40,8 +44,15 @@ BTN_FIRST, BTN_LAST = 0x120, 0x13F      # BTN_JOYSTICK .. Ende von BTN_GAMEPAD
 # wie in c64_keys.KEYMAP): 1 = Esc -> RUN/STOP, 29 = Strg links -> C=.
 AS_KEY = {0x129: 1, 0x128: 29,          # Start, Select beim Modell 081f:e401
           0x13B: 1, 0x13A: 29}          # BTN_START, BTN_SELECT anderer Pads
-NO_FIRE = set(AS_KEY) | {0x13C}         # dazu BTN_MODE: weder Feuer noch Taste
+BTN_MODE = 0x13C                        # weder Feuer noch Taste
+# Knöpfe mit eigener Aufgabe je Modell (Hersteller, Produkt): Knopf ->
+# Richtung und Knopf -> Taste der USB-Tastatur (57 = Leertaste).
+MODELS = {
+    (0x081F, 0xE401): ({0x120: UP, 0x122: DOWN},       # X hoch, B runter
+                       {0x123: 57}),                   # Y Leertaste; A (0x121) Feuer
+}
 EVIOCGABS = 0x80184540                  # + Achse: Bereich lesen (struct input_absinfo)
+EVIOCGID = 0x80084502                   # Hersteller/Produkt lesen (struct input_id)
 
 
 def _has_bit(mask: str, bit: int) -> bool:
@@ -93,14 +104,19 @@ class Pad:
     """Ein Pad: hält den Zustand von Achsen und Knöpfen und rechnet daraus
     die fünf Bits des Joysticks."""
 
-    def __init__(self, ranges: dict[int, tuple[int, int, int]]):
+    def __init__(self, ranges: dict[int, tuple[int, int, int]],
+                 model: tuple[int, int] | None = None):
         # ranges: Achse -> (jetziger Wert, min, max). Grenzen bei einem bzw.
-        # drei Vierteln des Bereichs.
+        # drei Vierteln des Bereichs. model: (Hersteller, Produkt) für MODELS.
         self.limits = {axis: (lo + (hi - lo) // 4, hi - (hi - lo) // 4)
                        for axis, (_, lo, hi) in ranges.items()}
         self.axes = {axis: value for axis, (value, _, _) in ranges.items()}
+        as_dir, as_key = MODELS.get(model, ({}, {}))
+        self.as_dir = as_dir
+        self.as_key = {**AS_KEY, **as_key}
         self.fire: set[int] = set()
-        self.held: set[int] = set()         # Knöpfe aus AS_KEY, die unten sind
+        self.held: set[int] = set()         # Knöpfe aus as_key, die unten sind
+        self.dirs: set[int] = set()         # Knöpfe aus as_dir, die unten sind
 
     def event(self, kind: int, code: int, value: int) -> bool:
         """Ein Ereignis von Linux; True, wenn sich die Bits ändern könnten."""
@@ -109,9 +125,14 @@ class Pad:
             return True
         if kind != EV_KEY or not BTN_FIRST <= code <= BTN_LAST:
             return False
-        target = self.held if code in AS_KEY else None if code in NO_FIRE else self.fire
-        if target is None:
+        if code in self.as_key:
+            target = self.held
+        elif code in self.as_dir:
+            target = self.dirs
+        elif code == BTN_MODE:
             return False
+        else:
+            target = self.fire
         if value:
             target.add(code)
         else:
@@ -120,10 +141,12 @@ class Pad:
 
     def keys(self) -> set[int]:
         """Die Tasten der USB-Tastatur, die das Pad gerade "drückt"."""
-        return {AS_KEY[code] for code in self.held}
+        return {self.as_key[code] for code in self.held}
 
     def bits(self) -> int:
         result = FIRE if self.fire else 0
+        for code in self.dirs:
+            result |= self.as_dir[code]
         for axis, minus, plus in ((ABS_X, LEFT, RIGHT), (ABS_Y, UP, DOWN)):
             low, high = self.limits[axis]
             if self.axes[axis] <= low:
@@ -140,13 +163,16 @@ class OpenPad(Pad):
         import fcntl    # erst hier: gibt es nur unter Linux, der Test läuft auch am PC
         self.phys, self.path, self.name = phys, path, name
         self.fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        buf = bytearray(8)
+        fcntl.ioctl(self.fd, EVIOCGID, buf)
+        _, vendor, product, _ = struct.unpack("4H", buf)
         ranges = {}
         for axis in (ABS_X, ABS_Y):
             buf = bytearray(24)
             fcntl.ioctl(self.fd, EVIOCGABS + axis, buf)
             value, lo, hi, _, _, _ = struct.unpack("6i", buf)
             ranges[axis] = (value, lo, hi)
-        super().__init__(ranges)
+        super().__init__(ranges, (vendor, product))
 
     def close(self) -> None:
         os.close(self.fd)

@@ -90,7 +90,24 @@ for kind, code, value, expected in steps:
         pad.event(1, 0x129, 0)
         check("losgelassen", pad.keys(), set())
 
-# 4. Startwert kommt von Linux: ein Pad, dessen Kreuz beim Öffnen schon
+# 4. Modell 081f:e401: A Feuer, X hoch, B runter, Y Leertaste; ohne Modell
+#    (oben) waren 0x120 und 0x123 Feuer.
+pad = pads.Pad({pads.ABS_X: (127, 0, 255), pads.ABS_Y: (127, 0, 255)}, (0x081F, 0xE401))
+steps = [  # (Art, Code, Wert, erwartete Bits, erwartete Tasten)
+    (1, 0x121, 1, pads.FIRE, set()), (1, 0x121, 0, 0, set()),           # A
+    (1, 0x120, 1, pads.UP, set()),                                      # X
+    (3, 0, 255, pads.UP | pads.RIGHT, set()),                           # X + rechts
+    (1, 0x120, 0, pads.RIGHT, set()), (3, 0, 127, 0, set()),
+    (1, 0x122, 1, pads.DOWN, set()), (1, 0x122, 0, 0, set()),           # B
+    (1, 0x123, 1, 0, {57}), (1, 0x129, 1, 0, {57, 1}),                  # Y, Start
+    (1, 0x123, 0, 0, {1}), (1, 0x129, 0, 0, set()),
+    (1, 0x124, 1, pads.FIRE, set()), (1, 0x124, 0, 0, set()),           # L: Feuer
+]
+for kind, code, value, bits, held in steps:
+    pad.event(kind, code, value)
+    check(f"081f:e401 nach {kind}/{code:#x}={value}", (pad.bits(), pad.keys()), (bits, held))
+
+# 5. Startwert kommt von Linux: ein Pad, dessen Kreuz beim Öffnen schon
 #    gedrückt ist, meldet das sofort.
 check("Startwert", pads.Pad({pads.ABS_X: (0, 0, 255), pads.ABS_Y: (127, 0, 255)}).bits(), pads.LEFT)
 
