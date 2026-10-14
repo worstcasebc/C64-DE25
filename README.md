@@ -194,6 +194,10 @@ started the usual way, for example with `SYS 49152`.
 
 `python sw/py/make_demo_prg.py` creates a small BASIC program
 (`sw/asm/build/demo.prg`) for trying out the loader.
+`python sw/py/make_big_prg.py` creates a self-checking program that fills
+all of BASIC memory (`$0801`–`$9FFF`); after `RUN` the border turns green
+("OK") or red, with the address of the first wrong byte. Loaded from Linux
+with `c64_hps.py`, its 38913 bytes take about 0.1 s.
 
 Text that a 6502 program writes to the debug UART at `$DE00` arrives on the
 same serial port.
