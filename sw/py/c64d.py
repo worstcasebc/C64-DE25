@@ -4,9 +4,12 @@ Läuft auf dem Board unter Linux, nicht auf dem PC. Braucht im selben
 Verzeichnis c64_keys.py, c64_disk.py, c64_blocks.py und c64_pads.py.
 
 Aufruf (root nötig: /dev/mem, Tastatur, USB-Stick einhängen):
-    sudo python3 c64d.py
-    sudo python3 c64d.py -v     jede Anforderung des Laufwerks anzeigen
-Beim Booten von selbst starten: siehe c64d.service.
+    sudo python3 /opt/c64/c64d.py
+    sudo python3 /opt/c64/c64d.py -v     jede Anforderung des Laufwerks anzeigen
+Beim Booten von selbst starten: siehe c64d.service. Die Skripte liegen in
+/opt/c64 und gehören root: Ein Dienst, der als root läuft, darf keine
+Dateien ausführen, die ein normaler Benutzer ändern kann. sw/py/to_board.py
+installiert sie dorthin.
 
 Der Dienst macht drei Dinge zugleich:
   1. Die USB-Tastatur ist die Tastatur des C64 (Belegung siehe c64_keys.py),
@@ -54,9 +57,17 @@ den Augenblick des Schreibens beschreibbar eingehängt. Eine .G64 bleibt
 schreibgeschützt.
 
 Die Dateien sucht der Dienst auf einem USB-Stick (FAT32, nicht exFAT), der zum Beispiel
-über einen Hub neben der Tastatur steckt; ist keiner da, im Verzeichnis
-dieses Skripts. Ein .PRG wird direkt ins RAM des C64 geladen; beginnt es an
-der BASIC-Startadresse, tippt der Dienst danach RUN.
+über einen Hub neben der Tastatur steckt; ist keiner da, im Ordner
+/home/terasic/c64 (LOCAL_FOLDER). Ein .PRG wird direkt ins RAM des C64
+geladen; beginnt es an der BASIC-Startadresse, tippt der Dienst danach RUN.
+
+Vorsicht als root: Der Dienst liest und schreibt Dateien, die ein anderer
+abgelegt hat. Er folgt deshalb keinen symbolischen Verknüpfungen (sie
+erscheinen nicht in der Liste, geöffnet wird mit O_NOFOLLOW), nimmt nur
+gewöhnliche Dateien bis zu einer Höchstgröße und legt die Sicherung .bak
+nur neu an, ohne eine vorhandene Datei zu überschreiben (O_EXCL). Den Stick
+hängt er als FAT ein, ohne Gerätedateien und Programme darauf zuzulassen
+(nodev, nosuid, noexec).
 
 Register (siehe quartus_hps/README.md): Tasten und Bytes ab 0x2001_0100,
 Diskette ab 0x2001_4000, Menüfenster ab 0x2001_5000 (Wort 0: Bit 0 =
@@ -71,6 +82,7 @@ import mmap
 import os
 import select
 import signal
+import stat
 import struct
 import subprocess
 import sys
@@ -111,7 +123,31 @@ JOY_KEYS = {
 }
 
 USB_MOUNT = "/run/c64-usb"      # hier hängt der Dienst den Stick selbst ein
+LOCAL_FOLDER = "/home/terasic/c64"  # Dateien, wenn kein Stick steckt
+MOUNT, UMOUNT = "/usr/bin/mount", "/usr/bin/umount"     # feste Pfade, nicht über PATH
+MOUNT_OPTIONS = "nosuid,nodev,noexec"
 EXTENSIONS = (".d64", ".g64", ".prg")
+MAX_IMAGE = 1 << 20             # größte .d64/.g64 (eine .g64 hat meist ~330 KB)
+MAX_PRG = 2 + 0x10000           # Ladeadresse und höchstens 64 KB
+
+
+def read_file(path: Path, limit: int) -> bytes:
+    """Liest eine gewöhnliche Datei bis zur Größe limit, ohne einer
+    symbolischen Verknüpfung zu folgen. OSError mit lesbarer Meldung sonst."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise OSError(0, "KEINE NORMALE DATEI")
+        if info.st_size > limit:
+            raise OSError(0, "DATEI ZU GROSS")
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            data = f.read(limit + 1)        # wächst sie beim Lesen, fällt es hier auf
+        if len(data) > limit:
+            raise OSError(0, "DATEI ZU GROSS")
+        return data
+    finally:
+        os.close(fd)
 
 
 def screen_codes(text: str, width: int, inverse: bool = False) -> list[int]:
@@ -192,7 +228,7 @@ class Drive:
     def insert(self, path: Path) -> str:
         """Legt ein Abbild ein. Liefert eine Fehlermeldung oder ''."""
         try:
-            image = path.read_bytes()
+            image = read_file(path, MAX_IMAGE)
         except OSError as err:
             return f"LESEFEHLER: {err.strerror}"
         is_g64 = image.startswith(disk.G64_MAGIC)
@@ -264,12 +300,26 @@ class Drive:
         self.dirty_since = 0.0
         mount = mount_point(self.path)
         remount = mount is not None and subprocess.run(
-            ["mount", "-o", "remount,rw", mount], capture_output=True).returncode == 0
+            [MOUNT, "-o", f"remount,rw,{MOUNT_OPTIONS}", mount], capture_output=True).returncode == 0
         try:
+            # Sicherung nur neu anlegen: O_EXCL scheitert, wenn es sie schon
+            # gibt — auch als Verknüpfung, die woandershin zeigt.
             backup = self.path.with_name(self.path.name + ".bak")
-            if not backup.exists():
-                backup.write_bytes(self.original)
-            with open(self.path, "r+b") as handle:
+            try:
+                fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+            except FileExistsError:
+                pass
+            else:
+                with os.fdopen(fd, "wb") as handle:
+                    handle.write(self.original)
+            # Das Abbild selbst: dieselbe gewöhnliche Datei wie beim Einlegen
+            # (keine Verknüpfung, gleiche Größe, nur ein Name).
+            fd = os.open(self.path, os.O_WRONLY | os.O_NOFOLLOW)
+            with os.fdopen(fd, "wb") as handle:
+                info = os.fstat(handle.fileno())
+                if (not stat.S_ISREG(info.st_mode) or info.st_size != len(self.image)
+                        or info.st_nlink != 1):
+                    raise OSError(0, "Datei hat sich seit dem Einlegen verändert")
                 handle.write(self.image)
                 handle.flush()
                 os.fsync(handle.fileno())
@@ -280,7 +330,7 @@ class Drive:
             print(f"{self.name} lässt sich nicht speichern: {err}", flush=True)
         finally:
             if remount:
-                subprocess.run(["mount", "-o", "remount,ro", mount], capture_output=True)
+                subprocess.run([MOUNT, "-o", f"remount,ro,{MOUNT_OPTIONS}", mount], capture_output=True)
 
 
 def mount_point(path: Path) -> str | None:
@@ -308,7 +358,7 @@ def find_stick() -> str | None:
             if os.path.exists(fields[0]):
                 return fields[1].replace("\\040", " ")
             # Stick wurde abgezogen, ohne ausgehängt zu werden
-            subprocess.run(["umount", "-l", fields[1]], capture_output=True)
+            subprocess.run([UMOUNT, "-l", fields[1]], capture_output=True)
     for device in sorted(glob.glob("/dev/sd?1")) + sorted(glob.glob("/dev/sd?")):
         # Kartenleser und leere Steckplätze melden ein Gerät ohne Medium
         # (Größe 0); ein Versuch, es einzuhängen, füllt nur das Kernel-Log.
@@ -319,7 +369,8 @@ def find_stick() -> str | None:
         if size == 0:
             continue
         os.makedirs(USB_MOUNT, exist_ok=True)
-        result = subprocess.run(["mount", "-o", "ro", device, USB_MOUNT], capture_output=True, text=True)
+        result = subprocess.run([MOUNT, "-t", "vfat", "-o", f"ro,{MOUNT_OPTIONS}", device, USB_MOUNT],
+                                capture_output=True, text=True)
         if result.returncode == 0:
             return USB_MOUNT
         # Grund festhalten: erscheint im Protokoll des Dienstes (journalctl -u c64d)
@@ -328,8 +379,13 @@ def find_stick() -> str | None:
 
 
 def list_files(folder: str) -> list[Path]:
+    """Die Abbilder und Programme im Ordner; ohne Verknüpfungen, und nichts,
+    wenn der Ordner selbst eine Verknüpfung ist."""
     try:
-        entries = [p for p in Path(folder).iterdir() if p.suffix.lower() in EXTENSIONS and p.is_file()]
+        if os.path.islink(folder):
+            return []
+        entries = [p for p in Path(folder).iterdir()
+                   if p.suffix.lower() in EXTENSIONS and not p.is_symlink() and p.is_file()]
     except OSError:
         return []
     return sorted(entries, key=lambda p: p.name.lower())
@@ -354,7 +410,7 @@ class Menu:
 
     def show(self) -> None:
         stick = find_stick()
-        folder = stick or str(Path(__file__).resolve().parent)
+        folder = stick or LOCAL_FOLDER
         self.source = "USB-STICK" if stick else f"KEIN USB-STICK: {folder}"
         files = list_files(folder)
         disk_entries = [(p.name, p) for p in files]
@@ -484,7 +540,7 @@ def main() -> int:
 
         def load_prg(path: Path) -> str:
             try:
-                prg = path.read_bytes()
+                prg = read_file(path, MAX_PRG)
                 blocks = prg_to_blocks(prg)
             except OSError as err:
                 return f"LESEFEHLER: {err.strerror}"

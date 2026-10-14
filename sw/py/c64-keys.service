@@ -5,7 +5,8 @@
 # angesteckt oder wird sie abgezogen, endet das Skript; systemd startet es
 # alle zwei Sekunden neu, bis wieder eine da ist.
 #
-# Einrichten (auf dem Board; das Skript liegt in /home/terasic):
+# Einrichten (auf dem Board; das Skript liegt in /opt/c64, siehe
+# to_board.py — es gehört root, weil es als root läuft):
 #   sudo cp c64-keys.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now c64-keys
@@ -16,7 +17,7 @@
 Description=USB-Tastatur als Tastatur des C64
 
 [Service]
-ExecStart=/usr/bin/python3 /home/terasic/c64_keys.py
+ExecStart=/usr/bin/python3 /opt/c64/c64_keys.py
 Restart=always
 RestartSec=2
 

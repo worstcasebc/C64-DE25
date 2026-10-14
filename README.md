@@ -235,7 +235,7 @@ lets them in anyway (setup in the file).
 **Menu.** F12 opens a window on top of the picture with three tabs:
 DISK lists the `.d64`, `.g64` and `.prg` files on a USB stick (FAT32, not
 exFAT), which can sit in a hub next to the keyboard (without a stick, the
-files in the folder of the script); SETTINGS holds the joystick port; RESET
+files in `/home/terasic/c64`); SETTINGS holds the joystick port; RESET
 resets the C64. F12 always opens on DISK, so that Enter never resets the C64
 by accident.
 
@@ -263,6 +263,7 @@ are used instead of the service, not next to it (a lock makes a second one
 end with a message):
 
 ```
+cd /opt/c64
 sudo python3 c64_keys.py                          USB keyboard only
 sudo python3 c64_disk.py game.d64                 insert one disk, read-only, until Ctrl+C
 sudo python3 c64_hps.py --type "PRINT 1+1"        type a line, then RETURN

@@ -289,7 +289,10 @@ The remaining steps are for the HPS variant only.
 
 ### D3. Copy the scripts to the board
 
-These files go into `/home/terasic` on the board:
+These files go into `/opt/c64` on the board, a folder that belongs to
+root: the services run as root, so nothing they execute may be changeable by
+a normal user (otherwise every user could act as root). Games and disk
+images for use without a USB stick go into `/home/terasic/c64`.
 
 | File | For |
 |------|-----|
@@ -307,13 +310,14 @@ Over the network (the card image runs an SSH server; for WLAN see D7):
 python sw/py/to_board.py <address of the board>
 ```
 
-copies all scripts the service needs into `/home/terasic` and restarts
-`c64d` (`sudo` asks for the password on the board; `--no-restart` only
-copies). With an SSH key on the board, copying needs no password; how to
-add one is at the top of `to_board.py`. Single files go with
-`scp <file> terasic@<address of the board>:~`.
+installs the scripts into `/opt/c64` (owner root), `c64d.service` and the
+gamepad rule into `/etc`, creates `~/c64` and restarts `c64d`. `sudo` asks
+once for the password on the board. With an SSH key on the board, copying
+needs no password; how to add one is at the top of `to_board.py`. Games go
+with `scp <file> terasic@<address of the board>:c64/`.
 
-Without a network, through the Linux console:
+Without a network, through the Linux console (into `/home/terasic`, then
+on the board `sudo install -o root -g root -m 644 <files> /opt/c64/`):
 
 - Text files: type `cat > <file>` on the board, paste the content, press
   Enter and then Ctrl+D. Check scripts afterwards with
@@ -336,8 +340,8 @@ Without a network, through the Linux console:
 2. Try it by hand:
 
    ```
-   sudo python3 c64_keys.py --list
-   sudo python3 c64_keys.py
+   sudo python3 /opt/c64/c64_keys.py --list
+   sudo python3 /opt/c64/c64_keys.py
    ```
 
    Typing now goes to the C64; Ctrl+C on the console ends it.
@@ -352,15 +356,15 @@ Without a network, through the Linux console:
 
    To switch it off again: `sudo systemctl disable --now c64-keys`.
 
-The service expects the script at `/home/terasic/c64_keys.py`. It also starts
+The service expects the script at `/opt/c64/c64_keys.py`. It also starts
 when a design without these registers is loaded; how the bridge reacts then
 has not been examined.
 
 ### D5. Programs and disks
 
 ```
-sudo python3 c64_hps.py --load game.prg --run     load a program and type RUN
-sudo python3 c64_disk.py game.d64                 insert a disk
+sudo python3 /opt/c64/c64_hps.py --load game.prg --run     load a program and type RUN
+sudo python3 /opt/c64/c64_disk.py game.d64                 insert a disk
 ```
 
 The disk stays inserted as long as `c64_disk.py` runs; Ctrl+C removes it.
@@ -380,7 +384,7 @@ works when a game asks for the next disk.
    formatted as **FAT32** and plug it into a USB hub together with the
    keyboard. Terasic's Linux cannot read exFAT, the format in which many
    sticks are sold; reformat such a stick on the PC. Without a stick the
-   service lists the files in its own folder (`/home/terasic`); the line
+   service lists the files in `/home/terasic/c64`; the line
    above the bottom of the menu says which source is in use. The stick can
    be unplugged and plugged in again while the service runs; the next time
    the menu is opened it uses whatever is there.
@@ -393,7 +397,7 @@ works when a game asks for the next disk.
 3. Try it by hand (Ctrl+C on the console ends it):
 
    ```
-   sudo python3 c64d.py
+   sudo python3 /opt/c64/c64d.py
    ```
 
    | Key | In the menu |
@@ -425,14 +429,19 @@ works when a game asks for the next disk.
    then unplug the pads and plug them in again. For another pad model, add
    its `idVendor`/`idProduct` (from `lsusb`) to the rule.
 
-4. Start it at every boot:
+4. Start it at every boot (`to_board.py` from D3 has already put
+   `c64d.service` into `/etc/systemd/system`):
 
    ```
-   sudo cp c64d.service /etc/systemd/system/
-   sudo systemctl daemon-reload
    sudo systemctl enable --now c64d
    systemctl status c64d
    ```
+
+   The service file restricts what the service may do (see the comments in
+   `sw/py/c64d.service`): only the capabilities for `/dev/mem`, mounting and
+   writing disks, the file system read-only except `/run` and
+   `/home/terasic/c64`. A USB stick mounted by the service is therefore only
+   visible inside the service, not under `/run/c64-usb` in a shell.
 
 Only one program at a time may serve the keyboard and the disk drive. The
 scripts check this themselves: a second `c64d.py`, or `c64_keys.py` or
@@ -441,7 +450,7 @@ hand while the service is installed, stop the service first:
 
 ```
 sudo systemctl stop c64d
-sudo python3 c64d.py -v
+sudo python3 /opt/c64/c64d.py -v
 ```
 
 With `-v` it prints every request of the disk drive and, every two seconds,

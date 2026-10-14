@@ -8,22 +8,55 @@
 # streiten. Den alten Dienst deshalb vorher abschalten:
 #   sudo systemctl disable --now c64-keys
 #
-# Einrichten (auf dem Board; die Skripte c64d.py, c64_keys.py, c64_disk.py,
-# c64_blocks.py und c64_pads.py liegen in /home/terasic; für USB-Gamepads
-# am Hub der Tastatur zusätzlich 99-c64-gamepad.rules, siehe dort):
-#   sudo cp c64d.service /etc/systemd/system/
-#   sudo systemctl daemon-reload
-#   sudo systemctl enable --now c64d
+# Einrichten: vom PC aus mit sw/py/to_board.py. Es legt die Skripte nach
+# /opt/c64 (gehört root, so kann kein normaler Benutzer ändern, was hier als
+# root läuft), diese Datei nach /etc/systemd/system und startet den Dienst
+# neu. Einmalig danach:
+#   sudo systemctl enable c64d
 # Nachsehen:   systemctl status c64d
 # Abschalten:  sudo systemctl disable --now c64d
+#
+# Härtung: Der Dienst bekommt nur, was er braucht. Wie bei einem Mitarbeiter
+# mit Schlüsselbund, an dem nur die Schlüssel für seine eigenen Räume hängen.
+#   - Fähigkeiten (CapabilityBoundingSet): CAP_SYS_RAWIO für /dev/mem (die
+#     Register im FPGA), CAP_SYS_ADMIN zum Einhängen des USB-Sticks,
+#     CAP_DAC_OVERRIDE zum Schreiben von Disketten in /home/terasic/c64.
+#   - Dateisystem: alles nur lesbar (ProtectSystem=strict, ProtectHome)
+#     außer /run (Sperrdateien, Einhängepunkt des Sticks) und dem Ordner
+#     /home/terasic/c64 (das "-" davor: kein Fehler, wenn es ihn nicht gibt).
+#     Einhängen geschieht im eigenen Namensraum des Dienstes; der Stick ist
+#     außerhalb des Dienstes deshalb nicht unter /run/c64-usb zu sehen.
+#   - Gerätedateien bleiben erreichbar (kein PrivateDevices, kein
+#     DeviceAllow): /dev/mem, /dev/input und die USB-Sticks werden gebraucht.
+#     Deshalb fehlt auch ProtectClock: Es setzt nebenbei DeviceAllow für die
+#     Uhr und sperrt damit alle anderen Geräte (ausprobiert: /dev/mem gibt
+#     dann "Operation not permitted").
 
 [Unit]
 Description=C64: USB-Tastatur, Diskettenlaufwerk und Menue
 
 [Service]
-ExecStart=/usr/bin/python3 /home/terasic/c64d.py
+ExecStart=/usr/bin/python3 /opt/c64/c64d.py
 Restart=always
 RestartSec=2
+Environment=PYTHONDONTWRITEBYTECODE=1
+
+CapabilityBoundingSet=CAP_SYS_RAWIO CAP_SYS_ADMIN CAP_DAC_OVERRIDE
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/run -/home/terasic/c64
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+SystemCallArchitectures=native
 
 [Install]
 WantedBy=multi-user.target
