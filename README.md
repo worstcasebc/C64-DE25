@@ -47,7 +47,8 @@ does the rest:
 - **Menu:** F12 opens a window on top of the picture, while the C64 keeps
   running underneath — insert or change a disk, load a `.PRG`, choose the
   joystick port, reset the C64.
-- **Joystick:** the numeric keypad of the USB keyboard, on port 1 or 2.
+- **Joystick:** the numeric keypad of the USB keyboard, on port 1 or 2, and
+  up to two USB gamepads (the first on port 2, the second on port 1).
 - **LEDs:** state of the service, drive activity, unsaved changes.
 
 The build without the HPS still exists for quick tests; there the keyboard
@@ -219,6 +220,17 @@ top of `sw/py/c64_keys.py`.
 **Joystick.** The numeric keypad: 8/2/4/6 are the directions, 7/9/1/3 the
 diagonals, 0 and right Ctrl are fire. The menu sets the port under SETTINGS
 (most games expect port 2).
+
+USB gamepads work as joysticks too: the first one on port 2, the second on
+port 1 ("first" is the one on the lower USB port number, so the order stays
+the same after a restart). The D-pad gives the directions, the action
+buttons are fire, Start is RUN/STOP and Select is the Commodore key. Pads can be plugged in and
+out while the C64 runs; SETTINGS in the menu shows which pad is on which
+port. Tested with the gamepad 081f:e401 (SNES style). Many cheap pads
+announce 500 mA although they need almost nothing, and a hub without its
+own power supply (such as the one in a keyboard) may hand out only 100 mA
+per port, so Linux rejects them. The udev rule `sw/py/99-c64-gamepad.rules`
+lets them in anyway (setup in the file).
 
 **Menu.** F12 opens a window on top of the picture with three tabs:
 DISK lists the `.d64`, `.g64` and `.prg` files on a USB stick (FAT32, not

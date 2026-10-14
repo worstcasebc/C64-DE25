@@ -1,7 +1,7 @@
 """Dienst auf dem HPS: USB-Tastatur, Diskettenlaufwerk und Auswahlmenü des C64.
 
 Läuft auf dem Board unter Linux, nicht auf dem PC. Braucht im selben
-Verzeichnis c64_keys.py, c64_disk.py und c64_blocks.py.
+Verzeichnis c64_keys.py, c64_disk.py, c64_blocks.py und c64_pads.py.
 
 Aufruf (root nötig: /dev/mem, Tastatur, USB-Stick einhängen):
     sudo python3 c64d.py
@@ -9,7 +9,8 @@ Aufruf (root nötig: /dev/mem, Tastatur, USB-Stick einhängen):
 Beim Booten von selbst starten: siehe c64d.service.
 
 Der Dienst macht drei Dinge zugleich:
-  1. Die USB-Tastatur ist die Tastatur des C64 (Belegung siehe c64_keys.py).
+  1. Die USB-Tastatur ist die Tastatur des C64 (Belegung siehe c64_keys.py),
+     USB-Gamepads sind seine Joysticks (c64_pads.py).
   2. Er beliefert das Laufwerk 1541 mit den Spuren der eingelegten Diskette
      (wie c64_disk.py).
   3. F12 öffnet ein Menü, das als Fenster über dem Bild liegt
@@ -27,6 +28,14 @@ hat, die noch nicht in der Datei stehen — dann nicht ausschalten.
 Der Ziffernblock ist ein Joystick: 8/2/4/6 sind die Richtungen, 7/9/1/3 die
 Diagonalen, 0 und Strg rechts sind Feuer. An welchem Port des C64 er steckt
 (die meisten Spiele erwarten Port 2), stellt man im Menü unter SETTINGS um.
+
+USB-Gamepads (c64_pads.py) sind ebenfalls Joysticks: das erste an Port 2,
+das zweite an Port 1. "Erstes" ist das am USB-Anschluss mit der kleineren
+Nummer, damit die Zuordnung nach jedem Neustart gleich bleibt. Steuerkreuz =
+Richtungen, die Aktionsknöpfe = Feuer, Start = RUN/STOP, Select = C=
+(Commodore-Taste). Pads lassen sich im Betrieb
+anstecken und abziehen. Hängen Pad und Ziffernblock am selben Port, gilt,
+was einer von beiden drückt. Unter SETTINGS steht, welches Pad wo steckt.
 
 Im Menü:
     Pfeil links/rechts          Reiter wechseln (DISK, SETTINGS, RESET)
@@ -70,6 +79,7 @@ from pathlib import Path
 
 import c64_disk as disk
 import c64_keys as keys
+import c64_pads as gamepads
 from c64_blocks import BASIC_START, prg_to_blocks
 
 BYTE_DATA = 0x100 // 4          # Register von hps_byte_port in der Seite 0x2001_0000
@@ -332,6 +342,7 @@ class Menu:
         self.osd, self.drive, self.load_prg, self.reset_c64 = osd, drive, load_prg, reset_c64
         self.open = False
         self.joy_port = 2
+        self.pad_names: list[str] = []      # Pads an Port 2 und 1, von main()
         self.tab = TAB_DISK
         # Je Reiter: Einträge (Text, Datei) oder (Text, "eject" / "joy" /
         # "reset"), gewählter Eintrag und oberste sichtbare Zeile.
@@ -350,7 +361,7 @@ class Menu:
         if self.drive.name:
             disk_entries.insert(0, ("<DISKETTE HERAUSNEHMEN>", "eject"))
         self.entries[TAB_DISK] = disk_entries
-        self.entries[TAB_SETTINGS] = [(f"JOYSTICK: PORT {self.joy_port}", "joy")]
+        self.entries[TAB_SETTINGS] = [(f"ZIFFERNBLOCK: PORT {self.joy_port}", "joy")]
         self.entries[TAB_RESET] = [("C64 ZURUECKSETZEN", "reset")]
         self.tab = TAB_DISK
         self.selected[TAB_DISK] = min(self.selected[TAB_DISK], max(len(disk_entries) - 1, 0))
@@ -382,8 +393,13 @@ class Menu:
                 lines.append((" " + entries[index][0], index == self.selected[tab]))
             else:
                 lines.append(("", False))
-        lines += [(" " + self.message, False),
-                  (" " + self.source if tab == TAB_DISK else "", False),
+        if tab == TAB_SETTINGS:
+            names = self.pad_names + ["-", "-"]
+            bottom = [" PAD AN PORT 2: " + names[0], " PAD AN PORT 1: " + names[1]]
+        else:
+            bottom = [" " + self.message, " " + self.source if tab == TAB_DISK else ""]
+        lines += [(bottom[0], False),
+                  (bottom[1], False),
                   (" <-> REITER  ENTER  ESC=ZURUECK", True)]
         self.osd.show(lines)
 
@@ -422,7 +438,7 @@ class Menu:
                 return
             if path == "joy":
                 self.joy_port = 1 if self.joy_port == 2 else 2
-                entries[self.selected[tab]] = (f"JOYSTICK: PORT {self.joy_port}", "joy")
+                entries[self.selected[tab]] = (f"ZIFFERNBLOCK: PORT {self.joy_port}", "joy")
                 self.draw()
                 return
             if path.suffix.lower() == ".prg":
@@ -490,12 +506,66 @@ def main() -> int:
             write_status()
 
         def write_status() -> None:
-            """RESTORE (Bit 1) und der Joystick am gewählten Port (ab Bit 8 bzw. 16)."""
-            bits = 0
+            """RESTORE (Bit 1) und die Joysticks an Port 1 (ab Bit 8) und
+            Port 2 (ab Bit 16): Ziffernblock am gewählten Port, erstes Pad
+            an Port 2, zweites an Port 1."""
+            port = {1: 0, 2: 0}
             for code in joy_pressed:
-                bits |= JOY_KEYS[code]
+                port[menu.joy_port] |= JOY_KEYS[code]
+            for pad, number in zip(pads, (2, 1)):
+                port[number] |= pad.bits()
             reg_a[keys.STATUS] = ((keys.STATUS_RESTORE if restore else 0)
-                                  | bits << (8 if menu.joy_port == 1 else 16))
+                                  | port[1] << 8 | port[2] << 16)
+
+        def write_keys() -> None:
+            """Tastengitter aus der USB-Tastatur und den Knöpfen Start/Select
+            der Pads (RUN/STOP, C=); bei offenem Menü nur die Tastatur."""
+            nonlocal state
+            held = set(pressed)
+            if not menu.open:
+                for pad in pads:
+                    held |= pad.keys()
+            new = keys.matrix_state(held)
+            keys.write_state(reg_a, state, new)
+            state = new
+
+        def drop_pad(pad) -> None:
+            """Ein Pad, das nicht mehr antwortet (abgezogen), sofort entfernen."""
+            pad.close()
+            pads.remove(pad)
+            print(f"Gamepad abgezogen: {pad.name}", flush=True)
+            menu.pad_names = [p.name for p in pads]
+            if menu.open:
+                menu.draw()
+            write_status()
+            write_keys()
+
+        def scan_pads() -> None:
+            """Pads anstecken und abziehen: höchstens zwei, nach USB-Anschluss."""
+            nonlocal pads
+            wanted = gamepads.find_pads()[:2]
+            if [p.path for p in pads] == [path for _, path, _ in wanted]:
+                return
+            kept = {p.path: p for p in pads}
+            new = []
+            for phys, path, name in wanted:
+                if path in kept:
+                    new.append(kept.pop(path))
+                    continue
+                try:
+                    new.append(gamepads.OpenPad(phys, path, name))
+                    print(f"Gamepad: {name} ({phys})", flush=True)
+                except OSError:
+                    pass
+            for gone in kept.values():
+                gone.close()
+                print(f"Gamepad abgezogen: {gone.name}", flush=True)
+            pads = new
+            menu.pad_names = [p.name for p in pads]
+            if menu.open:
+                menu.draw()
+            write_status()
+            write_keys()
 
         drive = Drive(reg_b, verbose="-v" in sys.argv[1:])
         busy_until = 0.0        # solange wird das Laufwerk ohne Pause abgefragt
@@ -505,6 +575,8 @@ def main() -> int:
         menu = Menu(Osd(reg_b), drive, load_prg, reset_c64)
         kbd = None
         next_try = 0.0
+        pads: list[gamepads.OpenPad] = []
+        next_pad_scan = 0.0
         pressed: set[int] = set()
         joy_pressed: set[int] = set()
         restore = False
@@ -526,11 +598,34 @@ def main() -> int:
                         except OSError:
                             kbd = None
 
+                # Pads suchen: angesteckte öffnen, abgezogene schließen
+                if time.monotonic() >= next_pad_scan:
+                    next_pad_scan = time.monotonic() + 1.0
+                    scan_pads()
+
                 # Arbeitet das Laufwerk gerade, wird nicht geschlafen: Es
                 # wartet bei jedem Spurwechsel auf seine Lieferung.
                 pause = 0.0 if time.monotonic() < busy_until else 0.0005
-                ready = select.select([kbd] if kbd is not None else [], [], [], pause)[0]
-                if ready:
+                fds = ([kbd] if kbd is not None else []) + [p.fd for p in pads]
+                ready = select.select(fds, [], [], pause)[0]
+                for pad in list(pads):
+                    if pad.fd not in ready:
+                        continue
+                    try:
+                        data = os.read(pad.fd, keys.EVENT.size * 32)
+                    except BlockingIOError:
+                        continue
+                    except OSError:         # abgezogen
+                        drop_pad(pad)
+                        continue
+                    changed = False
+                    for offset in range(0, len(data) - keys.EVENT.size + 1, keys.EVENT.size):
+                        _, _, kind, code, value = keys.EVENT.unpack_from(data, offset)
+                        changed |= pad.event(kind, code, value)
+                    if changed:
+                        write_status()
+                        write_keys()
+                if kbd is not None and kbd in ready:
                     try:
                         data = os.read(kbd, keys.EVENT.size * 32)
                     except BlockingIOError:
@@ -540,6 +635,7 @@ def main() -> int:
                         kbd, data, pressed, state = None, b"", set(), 0
                         joy_pressed, restore = set(), False
                         release_all()
+                        write_status()      # Pads gelten weiter
                     for offset in range(0, len(data) - keys.EVENT.size + 1, keys.EVENT.size):
                         _, _, kind, code, value = keys.EVENT.unpack_from(data, offset)
                         if kind != keys.EV_KEY:
@@ -555,6 +651,7 @@ def main() -> int:
                                 pressed, state = set(), 0
                                 joy_pressed, restore = set(), False
                                 release_all()
+                                write_status()      # Pads gelten weiter
                                 menu.show()
                             continue
                         if code == keys.KEY_RESTORE:
@@ -572,9 +669,7 @@ def main() -> int:
                             pressed.add(code)
                         else:
                             pressed.discard(code)
-                        new = keys.matrix_state(pressed)
-                        keys.write_state(reg_a, state, new)
-                        state = new
+                        write_keys()
 
                 if drive.serve():
                     busy_until = time.monotonic() + 0.5
@@ -607,6 +702,8 @@ def main() -> int:
             reg_b.release()
             if kbd is not None:
                 os.close(kbd)
+            for pad in pads:
+                pad.close()
     print("c64d beendet.")
     return 0
 

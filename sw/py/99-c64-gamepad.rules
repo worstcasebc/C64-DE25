@@ -1,0 +1,20 @@
+# 99-c64-gamepad.rules — USB-Gamepads an einem Hub ohne Netzteil zulassen.
+#
+# Das Pad 081f:e401 ("USB gamepad", SNES-Form) meldet sich mit 500 mA an,
+# braucht aber nur wenige mA. Ein Hub ohne eigenes Netzteil (etwa der in der
+# Tastatur) darf je Anschluss nur 100 mA vergeben; Linux lehnt das Pad dann
+# ab ("rejected 1 configuration due to insufficient available bus power").
+# Diese Regel richtet es trotzdem ein, wie von Hand:
+#   echo 1 > /sys/bus/usb/devices/<Anschluss>/bConfigurationValue
+# Linux schreibt dabei "new config #1 exceeds power limit by 400mA" ins
+# Protokoll; das ist zu erwarten.
+#
+# Ein anderes Pad mit demselben Problem: Nummer mit lsusb nachsehen und eine
+# weitere Zeile mit seinem idVendor/idProduct anlegen.
+#
+# Einrichten (auf dem Board):
+#   sudo cp 99-c64-gamepad.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload
+# Danach die Pads einmal abziehen und wieder anstecken.
+
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="081f", ATTR{idProduct}=="e401", ATTR{bConfigurationValue}="1"

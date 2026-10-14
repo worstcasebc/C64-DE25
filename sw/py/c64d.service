@@ -8,8 +8,9 @@
 # streiten. Den alten Dienst deshalb vorher abschalten:
 #   sudo systemctl disable --now c64-keys
 #
-# Einrichten (auf dem Board; die Skripte c64d.py, c64_keys.py, c64_disk.py
-# und c64_blocks.py liegen in /home/terasic):
+# Einrichten (auf dem Board; die Skripte c64d.py, c64_keys.py, c64_disk.py,
+# c64_blocks.py und c64_pads.py liegen in /home/terasic; für USB-Gamepads
+# am Hub der Tastatur zusätzlich 99-c64-gamepad.rules, siehe dort):
 #   sudo cp c64d.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now c64d
