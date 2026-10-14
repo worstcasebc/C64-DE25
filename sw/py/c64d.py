@@ -14,7 +14,9 @@ Der Dienst macht drei Dinge zugleich:
      (wie c64_disk.py).
   3. F12 öffnet ein Menü, das als Fenster über dem Bild liegt
      (rtl/video/video_osd.v) — der C64 läuft darunter ungestört weiter, auch
-     ein Spiel, das nach der nächsten Diskette fragt.
+     ein Spiel, das nach der nächsten Diskette fragt. Das Menü hat drei
+     Reiter: DISK (Diskette einlegen oder herausnehmen, Programm laden),
+     SETTINGS (Joystick-Port) und RESET (C64 zurücksetzen).
 
 Die LEDs des Boards: LED 0 blinkt schnell, solange dieser Dienst nicht läuft
 (Linux bootet noch), leuchtet, wenn er läuft, und blinkt langsam, wenn etwas
@@ -24,13 +26,16 @@ hat, die noch nicht in der Datei stehen — dann nicht ausschalten.
 
 Der Ziffernblock ist ein Joystick: 8/2/4/6 sind die Richtungen, 7/9/1/3 die
 Diagonalen, 0 und Strg rechts sind Feuer. An welchem Port des C64 er steckt
-(die meisten Spiele erwarten Port 2), stellt man im Menü um.
+(die meisten Spiele erwarten Port 2), stellt man im Menü unter SETTINGS um.
 
 Im Menü:
+    Pfeil links/rechts          Reiter wechseln (DISK, SETTINGS, RESET)
     Pfeil auf/ab, Bild auf/ab   Eintrag wählen
     Enter                       .D64/.G64 einlegen, .PRG laden, Joystick-Port
                                 wechseln, C64 zurücksetzen
     Esc oder F12                Menü schließen
+F12 öffnet immer den Reiter DISK, damit ein Enter nie aus Versehen den C64
+zurücksetzt.
 Solange das Menü offen ist, gehen die Tasten nicht an den C64.
 
 Eine .D64 ist beschreibbar (SAVE, Spielstände): Was der C64 schreibt, steht
@@ -78,9 +83,12 @@ LED_INTERVAL = 0.5              # so oft meldet sich der Dienst; das FPGA wartet
 COLS, ROWS = 32, 16
 LIST_ROWS = 10                  # Zeilen für Dateien im Fenster
 LIST_TOP = 3
+TABS = ("DISK", "SETTINGS", "RESET")
+TAB_DISK, TAB_SETTINGS, TAB_RESET = range(len(TABS))
 
 KEY_ESC, KEY_ENTER, KEY_F12 = 1, 28, 88
 KEY_HOME, KEY_UP, KEY_PAGEUP, KEY_END, KEY_DOWN, KEY_PAGEDOWN = 102, 103, 104, 107, 108, 109
+KEY_LEFT, KEY_RIGHT = 105, 106
 REPEATING = (KEY_UP, KEY_DOWN, KEY_PAGEUP, KEY_PAGEDOWN)    # im Menü wirkt Gedrückthalten
 
 # Joystick auf dem Ziffernblock: Tastennummer von Linux -> Bits des Joysticks
@@ -122,12 +130,17 @@ class Osd:
         self.shown = [None] * (COLS * ROWS)
         self.hide()
 
-    def show(self, lines: list[tuple[str, bool]]) -> None:
-        """lines: je Zeile (Text, invers); fehlende Zeilen bleiben leer."""
+    def show(self, lines: list) -> None:
+        """lines: je Zeile (Text, invers) oder eine Liste solcher Stücke,
+        die nebeneinander stehen (die Reiter); fehlende Zeilen und der Rest
+        einer Zeile bleiben leer."""
         codes = []
         for row in range(ROWS):
-            text, inverse = lines[row] if row < len(lines) else ("", False)
-            codes += screen_codes(text, COLS, inverse)
+            line = lines[row] if row < len(lines) else ("", False)
+            row_codes = []
+            for text, inverse in (line if isinstance(line, list) else [line]):
+                row_codes += screen_codes(text, len(text), inverse)
+            codes += (row_codes + screen_codes("", COLS))[:COLS]
         for i, code in enumerate(codes):
             if code != self.shown[i]:
                 self.reg[OSD_TEXT + i] = code
@@ -313,16 +326,18 @@ def list_files(folder: str) -> list[Path]:
 
 
 class Menu:
-    """Zustand des Auswahlmenüs."""
+    """Zustand des Auswahlmenüs mit drei Reitern (TABS)."""
 
     def __init__(self, osd: Osd, drive: Drive, load_prg, reset_c64):
         self.osd, self.drive, self.load_prg, self.reset_c64 = osd, drive, load_prg, reset_c64
         self.open = False
-        # Einträge: (Text, Datei) oder (Text, "eject" / "joy" / "reset")
-        self.entries: list[tuple[str, Path | str]] = []
         self.joy_port = 2
-        self.selected = 0
-        self.top = 0
+        self.tab = TAB_DISK
+        # Je Reiter: Einträge (Text, Datei) oder (Text, "eject" / "joy" /
+        # "reset"), gewählter Eintrag und oberste sichtbare Zeile.
+        self.entries: list[list[tuple[str, Path | str]]] = [[] for _ in TABS]
+        self.selected = [0] * len(TABS)
+        self.top = [0] * len(TABS)
         self.source = ""
         self.message = ""
 
@@ -331,12 +346,14 @@ class Menu:
         folder = stick or str(Path(__file__).resolve().parent)
         self.source = "USB-STICK" if stick else f"KEIN USB-STICK: {folder}"
         files = list_files(folder)
-        self.entries = [(p.name, p) for p in files]
+        disk_entries = [(p.name, p) for p in files]
         if self.drive.name:
-            self.entries.insert(0, ("<DISKETTE HERAUSNEHMEN>", "eject"))
-        self.entries.append((f"<JOYSTICK: PORT {self.joy_port}>", "joy"))
-        self.entries.append(("<C64 ZURUECKSETZEN>", "reset"))
-        self.selected = min(self.selected, len(self.entries) - 1)
+            disk_entries.insert(0, ("<DISKETTE HERAUSNEHMEN>", "eject"))
+        self.entries[TAB_DISK] = disk_entries
+        self.entries[TAB_SETTINGS] = [(f"JOYSTICK: PORT {self.joy_port}", "joy")]
+        self.entries[TAB_RESET] = [("C64 ZURUECKSETZEN", "reset")]
+        self.tab = TAB_DISK
+        self.selected[TAB_DISK] = min(self.selected[TAB_DISK], max(len(disk_entries) - 1, 0))
         self.message = "" if files else "KEINE .D64 .G64 .PRG GEFUNDEN"
         self.open = True
         self.draw()
@@ -346,44 +363,55 @@ class Menu:
         self.osd.hide()
 
     def draw(self) -> None:
-        if self.selected < self.top:
-            self.top = self.selected
-        if self.selected >= self.top + LIST_ROWS:
-            self.top = self.selected - LIST_ROWS + 1
-        lines = [(" C64: DISKETTE ODER PROGRAMM", True),
-                 (" LAUFWERK 8: " + (self.drive.name or "LEER"), False),
-                 ("", False)]
+        tab = self.tab
+        if self.selected[tab] < self.top[tab]:
+            self.top[tab] = self.selected[tab]
+        if self.selected[tab] >= self.top[tab] + LIST_ROWS:
+            self.top[tab] = self.selected[tab] - LIST_ROWS + 1
+        tabs = [(" ", False)]
+        for i, name in enumerate(TABS):
+            tabs += [(f" {name} ", i == tab), (" ", False)]
+        info = {TAB_DISK: "LAUFWERK 8: " + (self.drive.name or "LEER"),
+                TAB_SETTINGS: "ENTER AENDERT DEN WERT",
+                TAB_RESET: "PROGRAMM IM RAM GEHT VERLOREN"}[tab]
+        lines = [tabs, (" " + info, False), ("", False)]
+        entries = self.entries[tab]
         for row in range(LIST_ROWS):
-            index = self.top + row
-            if index < len(self.entries):
-                lines.append((" " + self.entries[index][0], index == self.selected))
+            index = self.top[tab] + row
+            if index < len(entries):
+                lines.append((" " + entries[index][0], index == self.selected[tab]))
             else:
                 lines.append(("", False))
         lines += [(" " + self.message, False),
-                  (" " + self.source, False)]
-        lines.append((" PFEILE  ENTER  ESC=ZURUECK", True))
+                  (" " + self.source if tab == TAB_DISK else "", False),
+                  (" <-> REITER  ENTER  ESC=ZURUECK", True)]
         self.osd.show(lines)
 
     def key(self, code: int) -> None:
         """Eine gedrückte Taste (oder Wiederholung) bei offenem Menü."""
-        last = len(self.entries) - 1
+        tab = self.tab
+        entries = self.entries[tab]
+        last = max(len(entries) - 1, 0)
         if code in (KEY_ESC, KEY_F12):
             self.close()
             return
-        if code == KEY_UP:
-            self.selected = max(self.selected - 1, 0)
+        if code in (KEY_LEFT, KEY_RIGHT):
+            self.tab = (tab + (1 if code == KEY_RIGHT else -1)) % len(TABS)
+            self.message = ""
+        elif code == KEY_UP:
+            self.selected[tab] = max(self.selected[tab] - 1, 0)
         elif code == KEY_DOWN:
-            self.selected = min(self.selected + 1, max(last, 0))
+            self.selected[tab] = min(self.selected[tab] + 1, last)
         elif code == KEY_PAGEUP:
-            self.selected = max(self.selected - LIST_ROWS, 0)
+            self.selected[tab] = max(self.selected[tab] - LIST_ROWS, 0)
         elif code == KEY_PAGEDOWN:
-            self.selected = min(self.selected + LIST_ROWS, max(last, 0))
+            self.selected[tab] = min(self.selected[tab] + LIST_ROWS, last)
         elif code == KEY_HOME:
-            self.selected = 0
+            self.selected[tab] = 0
         elif code == KEY_END:
-            self.selected = max(last, 0)
-        elif code == KEY_ENTER and self.entries:
-            path = self.entries[self.selected][1]
+            self.selected[tab] = last
+        elif code == KEY_ENTER and entries:
+            path = entries[self.selected[tab]][1]
             if path == "eject":
                 self.drive.eject()
                 self.close()
@@ -394,7 +422,7 @@ class Menu:
                 return
             if path == "joy":
                 self.joy_port = 1 if self.joy_port == 2 else 2
-                self.entries[self.selected] = (f"<JOYSTICK: PORT {self.joy_port}>", "joy")
+                entries[self.selected[tab]] = (f"JOYSTICK: PORT {self.joy_port}", "joy")
                 self.draw()
                 return
             if path.suffix.lower() == ".prg":

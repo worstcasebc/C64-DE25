@@ -217,16 +217,19 @@ left Ctrl is the Commodore key, Page Up is RESTORE; the full table is at the
 top of `sw/py/c64_keys.py`.
 
 **Joystick.** The numeric keypad: 8/2/4/6 are the directions, 7/9/1/3 the
-diagonals, 0 and right Ctrl are fire. The menu sets the port (most games
-expect port 2).
+diagonals, 0 and right Ctrl are fire. The menu sets the port under SETTINGS
+(most games expect port 2).
 
-**Menu.** F12 opens a window on top of the picture. It lists the `.d64`,
-`.g64` and `.prg` files on a USB stick (FAT32, not exFAT), which can sit in a
-hub next to the keyboard; without a stick, the files in the folder of the
-script.
+**Menu.** F12 opens a window on top of the picture with three tabs:
+DISK lists the `.d64`, `.g64` and `.prg` files on a USB stick (FAT32, not
+exFAT), which can sit in a hub next to the keyboard (without a stick, the
+files in the folder of the script); SETTINGS holds the joystick port; RESET
+resets the C64. F12 always opens on DISK, so that Enter never resets the C64
+by accident.
 
 | Key | Function |
 |-----|----------|
+| Arrow left/right | switch tab |
 | Arrow up/down, Page Up/Down, Home, End | choose an entry |
 | Enter | insert the disk, load the program, switch the joystick port, reset the C64 |
 | Esc or F12 | close the menu |
